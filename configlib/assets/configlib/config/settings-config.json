@@ -1,0 +1,47 @@
+{
+  "SETTING_NAME": {
+    "name": "yaml-setting-name",
+    "comment": "Some optional desctiption",
+    "default": 64,
+    "validation": {
+      "min": 16,
+      "max": 128
+    }
+  },
+  "SETTING_NAME_2": {
+    "name": "yaml-setting-name-2",
+    "default": "FirstKey",
+    "validation": {
+      "mapping": {
+        "FirstKey": 1,
+        "SecondKey": 0.5
+      }
+    }
+  },
+  "SETTING_NAME_3": {
+    "name": "yaml-setting-name-3",
+    "default": true
+  },
+  "SETTING_NAME_4": {
+    "name": "yaml-setting-name-4",
+    "default": 64,
+    "validation": {
+      "values": [
+        16,
+        32,
+        64,
+        128
+      ]
+    }
+  },
+  "SETTING_NAME_5": {
+    "name": "yaml-setting-name-5",
+    "default": "FirstKey",
+    "validation": {
+      "mapping": {
+        "FirstKey": { "field": "value" },
+        "SecondKey": [0, 1, 2]
+      }
+    }
+  }
+}

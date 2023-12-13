@@ -1,0 +1,14 @@
+{
+    "type": "code",
+    "modid": "configlib",
+    "name": "Config lib",
+    "authors": [
+        "Maltiez"
+    ],
+    "description": "Configs for content mods",
+    "version": "1.0.0",
+    "dependencies": {
+        "game": "1.18.8",
+        "vsimgui": "0.1.1"
+    }
+}

@@ -1,0 +1,102 @@
+﻿using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
+using System.Linq;
+using Vintagestory.API.Common;
+using Vintagestory.ServerMods.NoObf;
+
+namespace ConfigLib
+{
+    static public class SettingsTokenReplacer
+    {
+        internal static ILogger? Logger;
+
+        static private readonly HashSet<JTokenType> mAllowedTypes = new()
+        {
+            JTokenType.String,
+            JTokenType.Boolean,
+            JTokenType.Integer,
+            JTokenType.Float
+        };
+
+        static public void ReplaceInBaseType(RegistryObjectType baseType, List<RegistryObjectType> typesResolved)
+        {
+            int tokensReplaced = 0;
+
+            string domain = baseType.Code.Domain;
+
+            if (domain == "game")
+            {
+                foreach (string configDomain in ConfigLibModSystem.Domains)
+                {
+                    try
+                    {
+                        Replace(configDomain, baseType.jsonObject, ref tokensReplaced);
+                    }
+                    catch (ConfigLibException exception)
+                    {
+                        Logger?.Error($"[Config lib] [config domain: {configDomain}] [target: {baseType.Code}] {exception.Message}");
+                    }
+                }
+            }
+            else
+            {
+                try
+                {
+                    Replace(domain, baseType.jsonObject, ref tokensReplaced);
+                }
+                catch (ConfigLibException exception)
+                {
+                    Logger?.Error($"[Config lib] [config domain: {domain}] [target: {baseType.Code}] {exception.Message}");
+                }
+            }
+            
+            if (tokensReplaced > 0) Logger?.Notification($"[Config lib] Tokens replaced: {tokensReplaced} in ({baseType.Class}){baseType.Code}");
+        }
+
+        static private void Replace(string domain, JToken token, ref int tokensReplaced)
+        {
+            ConfigLibConfig? config = ConfigLibModSystem.GetConfig(domain);
+            if (config == null) return;
+            ReplaceRecursive(config, token, ref tokensReplaced);
+        }
+        static private void ReplaceRecursive(ConfigLibConfig config, JToken token, ref int tokensReplaced)
+        {
+            if (token is JArray tokenArray && IsValidToken(config, tokenArray))
+            {
+                config.ReplaceToken(tokenArray);
+                tokensReplaced++;
+                return;
+            }
+
+            foreach (JToken child in token.Children())
+            {
+                ReplaceRecursive(config, child, ref tokensReplaced);
+            }
+        }
+        static private bool IsValidToken(ConfigLibConfig config, JArray token)
+        {
+            bool valid = false;
+            foreach (JToken element in token.Where((element) => element.Type == JTokenType.String))
+            {
+                if ((element as JValue)?.Value is not string value) continue;
+
+                if (config.Settings.ContainsKey(value))
+                {
+                    valid = true;
+                    break;
+                }
+            }
+
+            foreach (JToken element in token)
+            {
+                if (!mAllowedTypes.Contains(element.Type))
+                {
+                    valid = false;
+                    break;
+                }
+            }
+
+            return valid;
+        }
+    }
+}
