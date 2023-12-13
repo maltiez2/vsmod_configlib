@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using Vintagestory.API.Server;
 using YamlDotNet.Serialization;
 
 namespace ConfigLib
@@ -11,28 +10,38 @@ namespace ConfigLib
     public class ConfigLibConfig
     {
         public Dictionary<string, ConfigSetting> Settings => mSettings;
+        public string ConfigFilePath { get; private set; }
+        public string ConfigFileContent => mYamlConfig;
+        public bool LoadedFromFile { get; private set; }
 
         private readonly ICoreAPI mApi;
         private readonly string mDomain;
         private readonly Dictionary<string, ConfigSetting> mSettings;
         private readonly TokenReplacer? mReplacer;
+        
+        private string mYamlConfig;
 
         public ConfigLibConfig(ICoreAPI api, string domain, JsonObject definition)
         {
             mApi = api;
             mDomain = domain;
+            ConfigFilePath = Path.Combine(mApi.DataBasePath, "ModConfig", $"{mDomain}.yaml");
 
             try
             {
-                string defaultConfig = ConfigParser.ParseDefinition(definition, out mSettings);
-                LoadSettings(defaultConfig);
+                mYamlConfig = ConfigParser.ParseDefinition(definition, out mSettings);
+                ReadConfigFromFile();
+                UpdateAndWriteConfig();
                 mApi.Logger.Notification($"[Config lib] [config domain: {domain}] Settings loaded: {mSettings.Count}");
                 mReplacer = new(mSettings);
+                LoadedFromFile = true;
             }
             catch (ConfigLibException exception)
             {
                 mApi.Logger.Error($"[Config lib] [config domain: {domain}] Error on parsing config: {exception.Message}.");
                 mSettings = new();
+                mYamlConfig = "<failed to load>";
+                LoadedFromFile = false;
                 return;
             }
         }
@@ -43,6 +52,9 @@ namespace ConfigLib
             mDomain = domain;
             mSettings = settings;
             mReplacer = new(mSettings);
+            ConfigFilePath = Path.Combine(mApi.DataBasePath, "ModConfig", $"{mDomain}.yaml");
+            mYamlConfig = "<not available on client in multiplayer>";
+            LoadedFromFile = false;
         }
 
         public void ReplaceToken(JArray token)
@@ -50,31 +62,38 @@ namespace ConfigLib
             mReplacer?.ReplaceToken(token);
         }
 
-        private void LoadSettings(string defaultConfig)
+        public void UpdateAndWriteConfig()
         {
-            string path = Path.Combine(mApi.DataBasePath, "ModConfig", $"{mDomain}.yaml");
-
-            try
-            {
-                using (StreamReader outputFile = new StreamReader(path))
-                {
-                    defaultConfig = outputFile.ReadToEnd();
-                }
-            }
-            catch
-            {
-                mApi.Logger.Notification($"[Config lib] [config domain: {mDomain}] Was not able to read settings, will create default settings file: {path}");
-            }
-
-            JObject config = DeserializeYaml(defaultConfig);
+            JObject config = DeserializeYaml(mYamlConfig);
 
             UpdateValues(config);
 
-            using (StreamWriter outputFile = new StreamWriter(path))
-            {
-                outputFile.Write(defaultConfig);
-            }
+            using StreamWriter outputFile = new(ConfigFilePath);
+            outputFile.Write(mYamlConfig);
         }
+
+        public bool ReadConfigFromFile()
+        {
+            if (Path.Exists(ConfigFilePath))
+            {
+                try
+                {
+                    using StreamReader outputFile = new(ConfigFilePath);
+                    mYamlConfig = outputFile.ReadToEnd();
+                    return true;
+                }
+                catch
+                {
+                    mApi.Logger.Notification($"[Config lib] [config domain: {mDomain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
+                }
+            }
+            else
+            {
+                mApi.Logger.Notification($"[Config lib] [config domain: {mDomain}] Creating default settings file: {ConfigFilePath}");
+            }
+
+            return false;
+        } 
 
         private void UpdateValues(JObject values)
         {

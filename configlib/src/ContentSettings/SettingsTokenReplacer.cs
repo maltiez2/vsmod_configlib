@@ -1,15 +1,12 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq;
-using Vintagestory.API.Common;
 using Vintagestory.ServerMods.NoObf;
 
 namespace ConfigLib
 {
     static public class SettingsTokenReplacer
     {
-        internal static ILogger? Logger;
-
         static private readonly HashSet<JTokenType> mAllowedTypes = new()
         {
             JTokenType.String,
@@ -34,7 +31,7 @@ namespace ConfigLib
                     }
                     catch (ConfigLibException exception)
                     {
-                        Logger?.Error($"[Config lib] [config domain: {configDomain}] [target: {baseType.Code}] {exception.Message}");
+                        ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {configDomain}] [target: {baseType.Code}] {exception.Message}");
                     }
                 }
             }
@@ -46,11 +43,11 @@ namespace ConfigLib
                 }
                 catch (ConfigLibException exception)
                 {
-                    Logger?.Error($"[Config lib] [config domain: {domain}] [target: {baseType.Code}] {exception.Message}");
+                    ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {domain}] [target: {baseType.Code}] {exception.Message}");
                 }
             }
             
-            if (tokensReplaced > 0) Logger?.Notification($"[Config lib] Tokens replaced: {tokensReplaced} in ({baseType.Class}){baseType.Code}");
+            if (tokensReplaced > 0) ConfigLibModSystem.Logger?.Notification($"[Config lib] Tokens replaced: {tokensReplaced} in ({baseType.Class}){baseType.Code}");
         }
 
         static private void Replace(string domain, JToken token, ref int tokensReplaced)

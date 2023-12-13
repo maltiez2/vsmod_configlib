@@ -13,7 +13,7 @@ namespace ConfigLib
         static public string ParseDefinition(JsonObject definition, out Dictionary<string, ConfigSetting> settings)
         {
             settings = new();
-            StringBuilder result = new StringBuilder();
+            StringBuilder result = new();
             foreach (JToken item in definition.Token)
             {
                 result.Append(ParseSetting(item, settings));
@@ -106,7 +106,7 @@ namespace ConfigLib
 
         static private string ParseMapping(JObject item)
         {
-            StringBuilder result = new StringBuilder();
+            StringBuilder result = new();
             result.Append("from [");
             bool first = true;
             foreach ((string name, _) in item)
@@ -121,7 +121,7 @@ namespace ConfigLib
 
         static private string ParseArray(JArray item)
         {
-            StringBuilder result = new StringBuilder();
+            StringBuilder result = new();
             result.Append("from [");
             bool first = true;
             foreach (JToken element in item)
@@ -143,19 +143,19 @@ namespace ConfigLib
 
         static private string SerializeToken(JProperty token)
         {
-            JObject tokenObject = new();
-            tokenObject.Add(token);
+            JObject tokenObject = new()
+            {
+                token
+            };
 
             var simplifiedToken = ConvertJTokenToObject(tokenObject);
 
             var serializer = new YamlDotNet.Serialization.Serializer();
 
-            using (var writer = new StringWriter())
-            {
-                serializer.Serialize(writer, simplifiedToken);
-                var yaml = writer.ToString();
-                return yaml;
-            }
+            using var writer = new StringWriter();
+            serializer.Serialize(writer, simplifiedToken);
+            var yaml = writer.ToString();
+            return yaml;
         }
 
         static private JProperty ParseToken(JProperty property, Dictionary<string, ConfigSetting> settings)
@@ -242,10 +242,8 @@ namespace ConfigLib
 
         static object ConvertJTokenToObject(JToken token)
         {
-            if (token is JValue)
-#pragma warning disable CS8603 // Possible null reference return.
-                return ((JValue)token).Value;
-#pragma warning restore CS8603 // Possible null reference return.
+            if (token is JValue value && value.Value != null)
+                return value.Value;
             if (token is JArray)
                 return token.AsEnumerable().Select(ConvertJTokenToObject).ToList();
             if (token is JObject)

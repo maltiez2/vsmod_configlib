@@ -1,10 +1,8 @@
 ﻿using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using Vintagestory.Common;
 
@@ -14,6 +12,7 @@ namespace ConfigLib
     {
         static public HashSet<string> Domains { get; private set; } = new();
         static public ConfigLibConfig? GetConfig(string domain) => mConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
+        static internal ILogger? Logger { get; private set; }
         
         static private readonly Dictionary<string, ConfigLibConfig> mConfigs = new();
 
@@ -23,47 +22,70 @@ namespace ConfigLib
         {
             mApi = api;
             HarmonyPatches.Patch("ConfigLib");
-        }
-
-        public override void StartServerSide(ICoreServerAPI api)
-        {
-            SettingsTokenReplacer.Logger = api.Logger;
+            if (api.Side == EnumAppSide.Server) Logger = api.Logger;
+            if (api.Side == EnumAppSide.Client && Logger == null) Logger = api.Logger;
         }
 
         public override void AssetsLoaded(ICoreAPI api)
         {
-            if (api is not ICoreServerAPI serverApi)
+            switch (api.Side)
             {
-                foreach (IAsset item in api.Assets.GetMany(AssetCategory.config.Code))
-                {
-                    if (!item.Location.BeginsWith("configlib", "config/configlib")) continue;
-                    byte[] data = item.Data;
-                    SettingsPacket packet = SerializerUtil.Deserialize<SettingsPacket>(data);
-                    ConfigLibConfig config = new ConfigLibConfig(api, packet.Domain, packet.GetSettings());
-                    mConfigs.TryAdd(packet.Domain, config);
-                    if (!Domains.Contains(packet.Domain)) Domains.Add(packet.Domain);
-                    api.Logger.Notification($"[Config lib] Loaded config from server assets for '{packet.Domain}'");
-                }
-                return;
+                case EnumAppSide.Server:
+                    foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
+                    {
+                        LoadConfig(asset);
+                    }
+                    break;
+                case EnumAppSide.Client:
+                    foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Location.BeginsWith("configlib", "config/configlib")))
+                    {
+                        RetrieveConfig(asset);
+                    }
+                    break;
+                case EnumAppSide.Universal:
+                    foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
+                    {
+                        LoadConfig(asset);
+                    }
+                    break;
             }
+        }
 
-            foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
-            {
-                string domain = asset.Location.Domain;
-                byte[] data = asset.Data;
-                string json = System.Text.Encoding.UTF8.GetString(data);
-                JObject token = JObject.Parse(json);
-                JsonObject parsedConfig = new(token);
-                ConfigLibConfig config = new ConfigLibConfig(serverApi, domain, parsedConfig);
-                mConfigs.Add(domain, config);
-                Domains.Add(domain);
-                api.Logger.Notification($"[Config lib] Loaded config for '{domain}'");
+        private void RetrieveConfig(IAsset asset)
+        {
+            if (mApi == null) return;
 
-                byte[] newData = SerializerUtil.Serialize(new SettingsPacket(domain, config.Settings));
-                AssetLocation location = new AssetLocation("configlib", $"config/configlib/{domain}");
-                Asset configAsset = new(newData, location, new SettingsOrigin(newData, location));
-                api.Assets.Add(location, configAsset);
-            }
+            byte[] data = asset.Data;
+            SettingsPacket packet = SerializerUtil.Deserialize<SettingsPacket>(data);
+            ConfigLibConfig config = new(mApi, packet.Domain, packet.GetSettings());
+            mConfigs.TryAdd(packet.Domain, config);
+            if (!Domains.Contains(packet.Domain)) Domains.Add(packet.Domain);
+            mApi.Logger.Notification($"[Config lib] Loaded config from server assets for '{packet.Domain}'");
+        }
+
+        private void LoadConfig(IAsset asset)
+        {
+            if (mApi == null) return;
+            
+            string domain = asset.Location.Domain;
+            byte[] data = asset.Data;
+            string json = System.Text.Encoding.UTF8.GetString(data);
+            JObject token = JObject.Parse(json);
+            JsonObject parsedConfig = new(token);
+            ConfigLibConfig config = new(mApi, domain, parsedConfig);
+            mConfigs.Add(domain, config);
+            Domains.Add(domain);
+            mApi.Logger.Notification($"[Config lib] Loaded config for '{domain}'");
+
+            StoreConfig(domain, config);
+        }
+
+        private void StoreConfig(string domain, ConfigLibConfig config)
+        {
+            byte[] newData = SerializerUtil.Serialize(new SettingsPacket(domain, config.Settings));
+            AssetLocation location = new("configlib", $"config/configlib/{domain}");
+            Asset configAsset = new(newData, location, new SettingsOrigin(newData, location));
+            mApi?.Assets.Add(location, configAsset);
         }
 
         public override double ExecuteOrder()
@@ -73,7 +95,7 @@ namespace ConfigLib
 
         public override void Dispose()
         {
-            SettingsTokenReplacer.Logger = null;
+            Logger = null;
             mConfigs.Clear();
             Domains.Clear();
             HarmonyPatches.Unpatch("ConfigLib");

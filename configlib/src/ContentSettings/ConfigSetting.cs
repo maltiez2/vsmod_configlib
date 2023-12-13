@@ -2,9 +2,6 @@
 using ProtoBuf;
 using System.Collections.Generic;
 using Vintagestory.API.Datastructures;
-using Vintagestory.API.Util;
-using YamlDotNet.Core.Tokens;
-using YamlDotNet.Serialization;
 
 namespace ConfigLib
 {
@@ -16,7 +13,6 @@ namespace ConfigLib
         public string YamlCode { get; private set; }
         public Dictionary<string, JsonObject>? Mapping { get; private set; }
 
-        public ConfigSetting() { }
         public ConfigSetting(string yamlCode, JsonObject defaultValue, JTokenType jsonType, Dictionary<string, JsonObject>? mapping = null)
         {
             Value = defaultValue;
@@ -55,18 +51,19 @@ namespace ConfigLib
 
         static private JToken Unwrap(JObject token)
         {
-            return token["value"];
+            if (token["value"] is not JToken value) return new JValue("<invalid>");
+            return value;
         }
     }
 
     [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
     public class ConfigSettingPacket
     {
-        public string Value { get; set; }
-        public string DefaultValue { get; private set; }
-        public JTokenType JsonType { get; private set; }
-        public string YamlCode { get; private set; }
-        public Dictionary<string, string>? Mapping { get; private set; }
+        public string Value { get; set; } = "";
+        public string DefaultValue { get; set; } = "";
+        public JTokenType JsonType { get; set; } = JTokenType.Null;
+        public string YamlCode { get; set; } = "";
+        public Dictionary<string, string>? Mapping { get; set; }
 
         public ConfigSettingPacket() { }
         public ConfigSettingPacket(ConfigSetting settings)
@@ -92,8 +89,10 @@ namespace ConfigLib
 
         static private JObject Wrap(JToken token)
         {
-            JObject result = new JObject();
-            result.Add("value", token);
+            JObject result = new()
+            {
+                { "value", token }
+            };
             return result;
         }
     }

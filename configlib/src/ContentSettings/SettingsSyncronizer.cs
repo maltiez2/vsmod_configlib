@@ -9,8 +9,8 @@ namespace ConfigLib
     [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
     public class SettingsPacket
     {
-        public string Domain;
-        public Dictionary<string, ConfigSettingPacket> Settings;
+        public string Domain { get; set; } = "";
+        public Dictionary<string, ConfigSettingPacket> Settings { get; set; } = new();
 
         public SettingsPacket() { }
 
@@ -39,22 +39,21 @@ namespace ConfigLib
 
     public class SettingsSynchronizer
     {
-        
-
         public delegate void SettingsHandler(string domain, Dictionary<string, ConfigSetting> settings);
 
         private readonly SettingsHandler mHandler;
 
         public SettingsSynchronizer(ICoreAPI api, SettingsHandler handler, string channelName)
         {
-            if (api.Side == EnumAppSide.Client)
+            mHandler = handler;
+
+            if (api is ICoreClientAPI clientApi)
             {
-                mHandler = handler;
-                StartClientSide(api as ICoreClientAPI, channelName);
+                StartClientSide(clientApi, channelName);
             }
-            else if (api.Side == EnumAppSide.Server)
+            else if (api is ICoreServerAPI serverApi)
             {
-                StartServerSide(api as ICoreServerAPI, channelName);
+                StartServerSide(serverApi, channelName);
             }
         }
 
@@ -79,7 +78,7 @@ namespace ConfigLib
 
         // SERVER SIDE
 
-        IServerNetworkChannel mServerNetworkChannel;
+        IServerNetworkChannel? mServerNetworkChannel;
 
         private void StartServerSide(ICoreServerAPI api, string channelName)
         {
@@ -96,7 +95,7 @@ namespace ConfigLib
                 serialized.Add(key, new (value));
             }
 
-            SettingsPacket packet = new SettingsPacket()
+            SettingsPacket packet = new()
             {
                 Settings = serialized,
                 Domain = domain
