@@ -5,7 +5,7 @@ using Vintagestory.ServerMods.NoObf;
 
 namespace ConfigLib
 {
-    static public class SettingsTokenReplacer
+    static public class RegistryObjectTokensReplacer
     {
         static private readonly HashSet<JTokenType> mAllowedTypes = new()
         {
@@ -15,7 +15,7 @@ namespace ConfigLib
             JTokenType.Float
         };
 
-        static public void ReplaceInBaseType(RegistryObjectType baseType, List<RegistryObjectType> typesResolved)
+        static public void ReplaceInBaseType(RegistryObjectType baseType)
         {
             int tokensReplaced = 0;
 
@@ -23,7 +23,7 @@ namespace ConfigLib
 
             if (domain == "game")
             {
-                foreach (string configDomain in ConfigLibModSystem.Domains)
+                foreach (string configDomain in ConfigLibModSystem.GetDomains())
                 {
                     try
                     {
@@ -52,11 +52,11 @@ namespace ConfigLib
 
         static private void Replace(string domain, JToken token, ref int tokensReplaced)
         {
-            ConfigLibConfig? config = ConfigLibModSystem.GetConfig(domain);
+            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
             if (config == null) return;
             ReplaceRecursive(config, token, ref tokensReplaced);
         }
-        static private void ReplaceRecursive(ConfigLibConfig config, JToken token, ref int tokensReplaced)
+        static private void ReplaceRecursive(Config config, JToken token, ref int tokensReplaced)
         {
             if (token is JArray tokenArray && IsValidToken(config, tokenArray))
             {
@@ -70,7 +70,7 @@ namespace ConfigLib
                 ReplaceRecursive(config, child, ref tokensReplaced);
             }
         }
-        static private bool IsValidToken(ConfigLibConfig config, JArray token)
+        static private bool IsValidToken(Config config, JArray token)
         {
             bool valid = false;
             foreach (JToken element in token.Where((element) => element.Type == JTokenType.String))

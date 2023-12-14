@@ -8,7 +8,7 @@ using Vintagestory.API.Datastructures;
 
 namespace ConfigLib
 {
-    static public class ConfigParser
+    static internal class ConfigParser
     {
         static public string ParseDefinition(JsonObject definition, out Dictionary<string, ConfigSetting> settings)
         {

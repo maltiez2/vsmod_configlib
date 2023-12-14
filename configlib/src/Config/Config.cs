@@ -7,7 +7,7 @@ using YamlDotNet.Serialization;
 
 namespace ConfigLib
 {
-    public class ConfigLibConfig
+    public class Config : IConfig
     {
         public Dictionary<string, ConfigSetting> Settings => mSettings;
         public string ConfigFilePath { get; private set; }
@@ -18,10 +18,9 @@ namespace ConfigLib
         private readonly string mDomain;
         private readonly Dictionary<string, ConfigSetting> mSettings;
         private readonly TokenReplacer? mReplacer;
-        
         private string mYamlConfig;
 
-        public ConfigLibConfig(ICoreAPI api, string domain, JsonObject definition)
+        public Config(ICoreAPI api, string domain, JsonObject definition)
         {
             mApi = api;
             mDomain = domain;
@@ -30,8 +29,8 @@ namespace ConfigLib
             try
             {
                 mYamlConfig = ConfigParser.ParseDefinition(definition, out mSettings);
-                ReadConfigFromFile();
-                UpdateAndWriteConfig();
+                ReadFromFile();
+                WriteToFile();
                 mApi.Logger.Notification($"[Config lib] [config domain: {domain}] Settings loaded: {mSettings.Count}");
                 mReplacer = new(mSettings);
                 LoadedFromFile = true;
@@ -45,8 +44,7 @@ namespace ConfigLib
                 return;
             }
         }
-
-        public ConfigLibConfig(ICoreAPI api, string domain, Dictionary<string, ConfigSetting> settings)
+        public Config(ICoreAPI api, string domain, Dictionary<string, ConfigSetting> settings)
         {
             mApi = api;
             mDomain = domain;
@@ -57,12 +55,12 @@ namespace ConfigLib
             LoadedFromFile = false;
         }
 
-        public void ReplaceToken(JArray token)
+        public ISetting? GetSetting(string code)
         {
-            mReplacer?.ReplaceToken(token);
+            if (!mSettings.ContainsKey(code)) return null;
+            return mSettings[code];
         }
-
-        public void UpdateAndWriteConfig()
+        public void WriteToFile()
         {
             JObject config = DeserializeYaml(mYamlConfig);
 
@@ -71,8 +69,7 @@ namespace ConfigLib
             using StreamWriter outputFile = new(ConfigFilePath);
             outputFile.Write(mYamlConfig);
         }
-
-        public bool ReadConfigFromFile()
+        public bool ReadFromFile()
         {
             if (Path.Exists(ConfigFilePath))
             {
@@ -93,7 +90,12 @@ namespace ConfigLib
             }
 
             return false;
-        } 
+        }
+
+        internal void ReplaceToken(JArray token)
+        {
+            mReplacer?.ReplaceToken(token);
+        }
 
         private void UpdateValues(JObject values)
         {
@@ -115,7 +117,6 @@ namespace ConfigLib
                 }
             }
         }
-
         static private JObject DeserializeYaml(string config)
         {
             IDeserializer deserializer = new DeserializerBuilder().Build();

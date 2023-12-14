@@ -5,7 +5,7 @@ using Vintagestory.API.Datastructures;
 
 namespace ConfigLib
 {
-    public class ConfigSetting
+    public class ConfigSetting : ISetting
     {
         public JsonObject Value { get; set; }
         public JsonObject DefaultValue { get; private set; }
@@ -30,7 +30,9 @@ namespace ConfigLib
             Mapping = ToMapping(settings.Mapping);
         }
 
-        static public Dictionary<string, JsonObject>? ToMapping(Dictionary<string, string>? mapping)
+        public static implicit operator ConfigSettingPacket(ConfigSetting setting) => new (setting);
+
+        static private Dictionary<string, JsonObject>? ToMapping(Dictionary<string, string>? mapping)
         {
             if (mapping == null) return null;
 
@@ -48,7 +50,6 @@ namespace ConfigLib
             }
             return output;
         }
-
         static private JToken Unwrap(JObject token)
         {
             if (token["value"] is not JToken value) return new JValue("<invalid>");
@@ -75,7 +76,9 @@ namespace ConfigLib
             Mapping = ToMapping(settings.Mapping);
         }
 
-        static public Dictionary<string, string>? ToMapping(Dictionary<string, JsonObject>? mapping)
+        public static implicit operator ConfigSetting(ConfigSettingPacket setting) => new(setting);
+
+        static private Dictionary<string, string>? ToMapping(Dictionary<string, JsonObject>? mapping)
         {
             if (mapping == null) return null;
 
@@ -86,7 +89,6 @@ namespace ConfigLib
             }
             return output;
         }
-
         static private JObject Wrap(JToken token)
         {
             JObject result = new()
