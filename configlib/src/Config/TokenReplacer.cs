@@ -6,7 +6,7 @@ using System.Text;
 
 namespace ConfigLib
 {
-    public class TokenReplacer
+    internal class TokenReplacer
     {
         private readonly Dictionary<string, ConfigSetting> mSettings;
 

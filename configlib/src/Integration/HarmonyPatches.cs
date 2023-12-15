@@ -3,7 +3,7 @@ using Vintagestory.ServerMods.NoObf;
 
 namespace ConfigLib
 {
-    static class HarmonyPatches
+    static internal class HarmonyPatches
     {
         public static void Patch(string harmonyId)
         {

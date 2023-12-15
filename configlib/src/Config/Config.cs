@@ -16,21 +16,27 @@ namespace ConfigLib
 
         private readonly ICoreAPI mApi;
         private readonly string mDomain;
-        private readonly Dictionary<string, ConfigSetting> mSettings;
+        private Dictionary<string, ConfigSetting> mSettings;
         private readonly TokenReplacer? mReplacer;
+        private readonly JsonObject mDefinition;
         private string mYamlConfig;
+        
+
 
         public Config(ICoreAPI api, string domain, JsonObject definition)
         {
             mApi = api;
             mDomain = domain;
+            mDefinition = definition;
             ConfigFilePath = Path.Combine(mApi.DataBasePath, "ModConfig", $"{mDomain}.yaml");
 
             try
             {
-                mYamlConfig = ConfigParser.ParseDefinition(definition, out mSettings);
+                mYamlConfig = ConfigParser.ParseDefinition(mDefinition, out mSettings);
                 ReadFromFile();
-                WriteToFile();
+                UpdateValues(DeserializeYaml(mYamlConfig));
+                using StreamWriter outputFile = new(ConfigFilePath);
+                outputFile.Write(mYamlConfig);
                 mApi.Logger.Notification($"[Config lib] [config domain: {domain}] Settings loaded: {mSettings.Count}");
                 mReplacer = new(mSettings);
                 LoadedFromFile = true;
@@ -53,6 +59,7 @@ namespace ConfigLib
             ConfigFilePath = Path.Combine(mApi.DataBasePath, "ModConfig", $"{mDomain}.yaml");
             mYamlConfig = "<not available on client in multiplayer>";
             LoadedFromFile = false;
+            mDefinition = new JsonObject(new JValue("<not loaded>"));
         }
 
         public ISetting? GetSetting(string code)
@@ -62,10 +69,8 @@ namespace ConfigLib
         }
         public void WriteToFile()
         {
-            JObject config = DeserializeYaml(mYamlConfig);
-
-            UpdateValues(config);
-
+            if (!LoadedFromFile) return;
+            WriteValues(DeserializeYaml(mYamlConfig));
             using StreamWriter outputFile = new(ConfigFilePath);
             outputFile.Write(mYamlConfig);
         }
@@ -82,14 +87,22 @@ namespace ConfigLib
                 catch
                 {
                     mApi.Logger.Notification($"[Config lib] [config domain: {mDomain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
+                    using StreamWriter outputFile = new(ConfigFilePath);
+                    outputFile.Write(mYamlConfig);
                 }
             }
             else
             {
                 mApi.Logger.Notification($"[Config lib] [config domain: {mDomain}] Creating default settings file: {ConfigFilePath}");
+                using StreamWriter outputFile = new(ConfigFilePath);
+                outputFile.Write(mYamlConfig);
             }
 
             return false;
+        }
+        public void RestoreToDefault()
+        {
+            if (LoadedFromFile) mYamlConfig = ConfigParser.ParseDefinition(mDefinition, out mSettings);
         }
 
         internal void ReplaceToken(JArray token)
@@ -97,13 +110,34 @@ namespace ConfigLib
             mReplacer?.ReplaceToken(token);
         }
 
+        private JsonObject ReplaceValues()
+        {
+            JsonObject result = mDefinition.Clone();
+            if (result.Token is not JObject settings) return result;
+            foreach ((string key, JToken? value) in settings)
+            {
+                if (mSettings.ContainsKey(key) && value is JObject valueObject)
+                {
+                    if (mSettings[key].MappingKey != null)
+                    {
+                        valueObject["default"]?.Replace(new JValue(mSettings[key].MappingKey));
+                    }
+                    else
+                    {
+                        valueObject["default"]?.Replace(mSettings[key].Value.Token);
+                    }
+                    
+                }
+            }
+            return result;
+        }
         private void UpdateValues(JObject values)
         {
             foreach ((_, var setting) in mSettings)
             {
                 if (!values.ContainsKey(setting.YamlCode)) continue;
 
-                if (setting.Mapping == null)
+                if (setting.Validation?.Mapping == null)
                 {
                     setting.Value = new(values[setting.YamlCode]);
                     continue;
@@ -111,11 +145,35 @@ namespace ConfigLib
 
                 string key = (string?)(values[setting.YamlCode] as JValue)?.Value ?? "";
 
-                if (setting.Mapping.ContainsKey(key))
+                if (setting.Validation?.Mapping?.ContainsKey(key) == true)
                 {
-                    setting.Value = setting.Mapping[key];
+                    setting.Value = setting.Validation.Mapping[key];
+                    setting.MappingKey = key;
                 }
             }
+        }
+        private void WriteValues(JObject values)
+        {
+            foreach ((_, var setting) in mSettings)
+            {
+                if (!values.ContainsKey(setting.YamlCode)) continue;
+
+                if (setting.Validation?.Mapping == null)
+                {
+                    values[setting.YamlCode]?.Replace(setting.Value.Token);
+                    continue;
+                }
+
+                string key = (string?)(values[setting.YamlCode] as JValue)?.Value ?? "";
+
+                if (setting.Validation?.Mapping?.ContainsKey(key) == true)
+                {
+                    values[setting.YamlCode]?.Replace(new JValue(setting.MappingKey));
+                }
+            }
+
+            JsonObject definition = ReplaceValues();
+            mYamlConfig = ConfigParser.ParseDefinition(definition, out _);
         }
         static private JObject DeserializeYaml(string config)
         {

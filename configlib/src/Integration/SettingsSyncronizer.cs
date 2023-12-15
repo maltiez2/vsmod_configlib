@@ -7,7 +7,7 @@ using Vintagestory.API.Server;
 namespace ConfigLib
 {
     [ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
-    public class SettingsPacket
+    internal class SettingsPacket
     {
         public string Domain { get; set; } = "";
         public Dictionary<string, ConfigSettingPacket> Settings { get; set; } = new();

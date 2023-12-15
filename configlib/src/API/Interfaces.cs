@@ -1,9 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
-using System.IO;
-using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using YamlDotNet.Serialization;
 
 namespace ConfigLib
 {
@@ -11,6 +8,7 @@ namespace ConfigLib
     {
         IEnumerable<string> Domains { get; }
         IConfig? GetConfig(string domain);
+        ISetting? GetSetting(string domain, string code);
     }
     
     public interface IConfig
@@ -21,15 +19,16 @@ namespace ConfigLib
 
         void WriteToFile();
         bool ReadFromFile();
+        void RestoreToDefault();
         ISetting? GetSetting(string code);
     }
 
     public interface ISetting
     {
-        public JsonObject Value { get; set; }
-        public JsonObject DefaultValue { get; }
-        public JTokenType JsonType { get; }
-        public string YamlCode { get; }
-        public Dictionary<string, JsonObject>? Mapping { get; }
+        JsonObject Value { get; set; }
+        JsonObject DefaultValue { get; }
+        JTokenType JsonType { get; }
+        string YamlCode { get; }
+        Validation? Validation { get; }
     }
 }

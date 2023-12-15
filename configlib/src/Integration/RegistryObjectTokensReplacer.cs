@@ -5,7 +5,7 @@ using Vintagestory.ServerMods.NoObf;
 
 namespace ConfigLib
 {
-    static public class RegistryObjectTokensReplacer
+    static internal class RegistryObjectTokensReplacer
     {
         static private readonly HashSet<JTokenType> mAllowedTypes = new()
         {

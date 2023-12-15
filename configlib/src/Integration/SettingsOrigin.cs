@@ -4,7 +4,7 @@ using Vintagestory.Common;
 
 namespace ConfigLib
 {
-    public class SettingsOrigin : IAssetOrigin
+    internal class SettingsOrigin : IAssetOrigin
     {
         public string OriginPath { get; protected set; }
 
@@ -30,7 +30,7 @@ namespace ConfigLib
 
         public List<IAsset> GetAssets(AssetCategory Category, bool shouldLoad = true)
         {
-            List<IAsset> list = new List<IAsset>()
+            List<IAsset> list = new()
             {
                 new Asset(mData, mLocation, this)
             };
@@ -40,7 +40,7 @@ namespace ConfigLib
 
         public List<IAsset> GetAssets(AssetLocation baseLocation, bool shouldLoad = true)
         {
-            List<IAsset> list = new List<IAsset>()
+            List<IAsset> list = new()
             {
                 new Asset(mData, mLocation, this)
             };

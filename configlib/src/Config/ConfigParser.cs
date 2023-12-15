@@ -162,15 +162,16 @@ namespace ConfigLib
         {
             string code = property.Name;
             string name = (string)((property.Value["name"] as JValue)?.Value ?? "");
+            string? comment = (string?)(property.Value["comment"] as JValue)?.Value;
 
             if (property.Value is not JObject propertyValue) throw new InvalidConfigException("Invalid config formatting");
 
-            JToken value = GetValue(code, name, propertyValue, settings);
+            JToken value = GetValue(code, name, comment, propertyValue, settings);
             JProperty result = new(name, value);
             return result;
         }
 
-        static private JToken GetValue(string code, string name, JObject property, Dictionary<string, ConfigSetting> settings)
+        static private JToken GetValue(string code, string name, string? comment, JObject property, Dictionary<string, ConfigSetting> settings)
         {
             if (!property.ContainsKey("default") || property["default"] is not JToken defaultValue)
             {
@@ -179,7 +180,7 @@ namespace ConfigLib
 
             if (property.ContainsKey("validation") && property["validation"] is JObject validation)
             {
-                return GetValidatedValue(code, name, defaultValue, validation, settings);
+                return GetValidatedValue(code, name, comment, defaultValue, validation, settings);
             }
 
             ConfigSetting setting = new(name, new(defaultValue), defaultValue.Type);
@@ -187,7 +188,7 @@ namespace ConfigLib
             return defaultValue;
         }
 
-        static private JToken GetValidatedValue(string code, string name, JToken defaultValue, JObject validation, Dictionary<string, ConfigSetting> settings)
+        static private JToken GetValidatedValue(string code, string name, string? comment, JToken defaultValue, JObject validation, Dictionary<string, ConfigSetting> settings)
         {
             if (validation.ContainsKey("mapping"))
             {
@@ -196,15 +197,38 @@ namespace ConfigLib
                     throw new InvalidConfigException($"Mapping for '{code}' setting has wrong format");
                 }
 
-                return ValidateMapping(code, name, defaultValue, mapping, settings);
+                return ValidateMapping(code, name, comment, defaultValue, mapping, settings);
             }
 
-            ConfigSetting setting = new(name, new(defaultValue), defaultValue.Type);
+            Validation? parsedValidation = null;
+
+            if (validation.ContainsKey("values"))
+            {
+                if (validation["values"] is not JArray values)
+                {
+                    throw new InvalidConfigException($"Values for '{code}' setting has wrong format");
+                }
+
+                List<JsonObject> parsedValues = new();
+                foreach (JToken value in values)
+                {
+                    parsedValues.Add(new(value));
+                }
+                parsedValidation = new(parsedValues);
+            }
+            else if (validation.ContainsKey("min") || validation.ContainsKey("max"))
+            {
+                JsonObject? min = validation.ContainsKey("min") ? new(validation["min"]) : null;
+                JsonObject? max = validation.ContainsKey("max") ? new(validation["max"]) : null;
+                parsedValidation = new(min, max);
+            }
+
+            ConfigSetting setting = new(name, new(defaultValue), defaultValue.Type, comment, parsedValidation);
             settings.Add(code, setting);
             return defaultValue;
         }
 
-        static private JToken ValidateMapping(string code, string name, JToken defaultValue, JObject mapping, Dictionary<string, ConfigSetting> settings)
+        static private JToken ValidateMapping(string code, string name, string? comment, JToken defaultValue, JObject mapping, Dictionary<string, ConfigSetting> settings)
         {
             if ((defaultValue as JValue)?.Value is not string value)
             {
@@ -235,7 +259,7 @@ namespace ConfigLib
                 settingMapping.Add(key, new(mappingValue));
             }
 
-            ConfigSetting setting = new(name, new(validatedValue), validatedValue.Type, settingMapping);
+            ConfigSetting setting = new(name, new(validatedValue), validatedValue.Type, comment, new(settingMapping), value);
             settings.Add(code, setting);
             return new JValue(value);
         }

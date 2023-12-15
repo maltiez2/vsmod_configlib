@@ -1,10 +1,12 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Util;
 using Vintagestory.Common;
+using VSImGui;
 
 namespace ConfigLib
 {
@@ -12,6 +14,7 @@ namespace ConfigLib
     {
         public IEnumerable<string> Domains => sDomains;
         public IConfig? GetConfig(string domain) => GetConfigStatic(domain);
+        public ISetting? GetSetting(string domain, string code) => GetConfigStatic(domain)?.GetSetting(code);
 
         static internal HashSet<string> GetDomains() => sDomains;
         static internal Config? GetConfigStatic(string domain) => sConfigs?.ContainsKey(domain) == true ? sConfigs[domain] : null;
@@ -19,6 +22,7 @@ namespace ConfigLib
 
         static private readonly Dictionary<string, Config> sConfigs = new();
         static private readonly HashSet<string> sDomains = new();
+        private GuiManager? mGuiManager;
         private ICoreAPI? mApi;
 
         public override void Start(ICoreAPI api)
@@ -27,6 +31,13 @@ namespace ConfigLib
             HarmonyPatches.Patch("ConfigLib");
             if (api.Side == EnumAppSide.Server) Logger = api.Logger;
             if (api.Side == EnumAppSide.Client && Logger == null) Logger = api.Logger;
+            
+            if (api is ICoreClientAPI clientApi)
+            {
+                mGuiManager = new(clientApi);
+                clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
+            }
+            
         }
         public override void AssetsLoaded(ICoreAPI api)
         {
@@ -62,6 +73,12 @@ namespace ConfigLib
             sConfigs.Clear();
             sDomains.Clear();
             HarmonyPatches.Unpatch("ConfigLib");
+            if (mApi?.Side == EnumAppSide.Client && mGuiManager != null)
+            {
+                mApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows -= mGuiManager.Draw;
+                mGuiManager.Dispose();
+            }
+            
             base.Dispose();
         }
 
@@ -77,7 +94,7 @@ namespace ConfigLib
             Config config = new(mApi, domain, parsedConfig);
             sConfigs.Add(domain, config);
             sDomains.Add(domain);
-            mApi.Logger.Notification($"[Config lib] Loaded config for '{domain}'");
+            //mApi.Logger.Notification($"[Config lib] Loaded config for '{domain}'");
 
             StoreConfig(domain, config);
         }
