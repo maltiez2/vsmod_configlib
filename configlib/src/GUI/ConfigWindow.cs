@@ -1,9 +1,6 @@
 ﻿using ImGuiNET;
-using VSImGui;
-using VSImGui.ImGuiUtils;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Util;
@@ -18,43 +15,29 @@ namespace ConfigLib
         private int mCurrentIndex = 0;
         private long mNextId = 0;
 
-        private readonly string mPath = "gui/backgrounds/soil.png";
-        private readonly Vector2 mTextureSize = new Vector2(256, 256);
-
-        private readonly Style mStyle;
-
         public ConfigWindow(ICoreClientAPI api)
         {
             mApi = api;
             mDomains = ConfigLibModSystem.GetDomains();
-            mStyle = new Style();
-            mStyle.Font = ("Montserrat-Regular", 18);
-            mStyle.PaddingWindow = (0, 4);
         }
 
         public bool Draw()
         {
-            ImGui.ShowDemoWindow();
-
-            StyleEditor.Draw(mStyle);
-
             mNextId = 0;
             bool opened = true;
 
-            using (new StyleApplier(mStyle))
-            {
-                ImGui.Begin("Configs##configlib", ref opened, ImGuiWindowFlags.MenuBar);
-                Utils.TileWindowWithTexture(mApi, new(mPath), mTextureSize, Utils.TextureRenderLevel.Window);
+            ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
+            ImGui.Begin("Configs##configlib", ref opened, ImGuiWindowFlags.MenuBar);
 
-                ImGui.BeginMenuBar();
+            if (ImGui.BeginMenuBar())
+            {
                 if (ImGui.MenuItem("Save")) SaveSettings();
                 ImGui.EndMenuBar();
-
-                DrawConfigList();
-
-                ImGui.End();
             }
 
+            DrawConfigList();
+
+            ImGui.End();
             return opened;
         }
 
@@ -63,9 +46,11 @@ namespace ConfigLib
             string filter = "";
             ImGui.InputTextWithHint("Mods configs##configlib", "filter (supports wildcards)", ref filter, 100);
             FilterMods(filter, out string[] domains, out string[] names);
-            ImGui.ListBox($"##modslist.configlib", ref mCurrentIndex, names, domains.Length);
+            ImGui.ListBox($"##modslist.configlib", ref mCurrentIndex, names, domains.Length, 5);
             ImGui.NewLine();
+            ImGui.BeginChild("##configlibdomainconfig", new(0, 0), true);
             if (domains.Length > mCurrentIndex) DrawDomainTab(domains[mCurrentIndex]);
+            ImGui.EndChild();
         }
 
         private void SaveSettings()
@@ -127,7 +112,7 @@ namespace ConfigLib
 
         private void DrawModConfig(Config config)
         {
-            ImGui.PushItemWidth(200);
+            ImGui.PushItemWidth(250);
             foreach ((string name, ConfigSetting setting) in config.Settings)
             {
                 if (setting.Validation != null)

@@ -31,13 +31,6 @@ namespace ConfigLib
             HarmonyPatches.Patch("ConfigLib");
             if (api.Side == EnumAppSide.Server) Logger = api.Logger;
             if (api.Side == EnumAppSide.Client && Logger == null) Logger = api.Logger;
-            
-            if (api is ICoreClientAPI clientApi)
-            {
-                mGuiManager = new(clientApi);
-                clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
-            }
-            
         }
         public override void AssetsLoaded(ICoreAPI api)
         {
@@ -61,6 +54,14 @@ namespace ConfigLib
                         LoadConfig(asset);
                     }
                     break;
+            }
+        }
+        public override void AssetsFinalize(ICoreAPI api)
+        {
+            if (api is ICoreClientAPI clientApi)
+            {
+                mGuiManager = new(clientApi);
+                clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
             }
         }
         public override double ExecuteOrder()
