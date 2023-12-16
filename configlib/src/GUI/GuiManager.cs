@@ -7,7 +7,6 @@ namespace ConfigLib
 {
     internal class GuiManager : IDisposable
     {
-        private readonly ICoreClientAPI mApi;
         private readonly GuiDialog dialog;
         private readonly ConfigWindow mConfigWindow;
         private readonly DevWindow mDevWindow;
@@ -18,8 +17,6 @@ namespace ConfigLib
 
         public GuiManager(ICoreClientAPI api)
         {
-            mApi = api;
-
             api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
             api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
 

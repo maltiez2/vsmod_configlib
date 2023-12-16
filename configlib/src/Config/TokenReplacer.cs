@@ -1,7 +1,9 @@
 ﻿using Newtonsoft.Json.Linq;
-using org.mariuszgromada.math.mxparser;
-using org.mariuszgromada.math.mxparser.syntaxchecker;
+using SimpleExpressionEngine;
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace ConfigLib
@@ -128,23 +130,24 @@ namespace ConfigLib
             StringBuilder result = new();
             foreach (JToken token in tokens)
             {
-                string value = (token as JValue)?.Value as string ?? "";
+                string value = (token as JValue)?.Value?.ToString() ?? "";
                 ReplaceWithValue(ref value);
                 result.Append(value);
             }
             string formula = result.ToString();
-            Expression expression;
+
+            SimpleExpressionEngine.Parser.Parse(formula);
+
+            float resultValue = 0;
 
             try
             {
-                expression = new Expression(formula);
+                resultValue = CalcFormula(formula);
             }
-            catch (ParseException exception)
+            catch (Exception exception)
             {
                 throw new InvalidTokenException($"Error on parsing config token as formula. Token: {formula}. Parser exception: {exception.Message}");
             }
-
-            double resultValue = expression.calculate();
 
             if (double.IsNaN(resultValue))
             {
@@ -153,5 +156,48 @@ namespace ConfigLib
 
             tokens.Replace(new JValue(resultValue));
         }
+
+        private float CalcFormula(string formula)
+        {
+            return (float)Parser.Parse(formula).Eval(new ReflectionContext(1E-12));
+        }
     }
+
+#pragma warning disable S2933, CS8605 // Fields that are only assigned in the constructor should be "readonly"
+    public class ReflectionContext : IContext
+    {
+        public ReflectionContext(object targetObject)
+        {
+            _targetObject = targetObject;
+        }
+
+
+        object _targetObject;
+
+        public double ResolveVariable(string name)
+        {
+            // Find property
+            var pi = _targetObject.GetType().GetProperty(name);
+            if (pi == null)
+                throw new InvalidDataException($"Unknown variable: '{name}'");
+
+            // Call the property
+            return (double)pi.GetValue(_targetObject);
+        }
+
+        public double CallFunction(string name, double[] arguments)
+        {
+            // Find method
+            var mi = _targetObject.GetType().GetMethod(name);
+            if (mi == null)
+                throw new InvalidDataException($"Unknown function: '{name}'");
+
+            // Convert double array to object array
+            var argObjs = arguments.Select(x => (object)x).ToArray();
+
+            // Call the method
+            return (double)mi.Invoke(_targetObject, argObjs);
+        }
+    }
+#pragma warning restore S2933, CS8605 // Fields that are only assigned in the constructor should be "readonly"
 }

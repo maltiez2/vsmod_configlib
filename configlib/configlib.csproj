@@ -13,6 +13,11 @@
       <Private>False</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
+    <Reference Include="SimpleExpressionEngine">
+      <HintPath>..\libs\SimpleExpressionEngine.dll</HintPath>
+      <Private>True</Private>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+    </Reference>
     <Reference Include="VintagestoryAPI">
       <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
       <Private>false</Private>
@@ -67,10 +72,6 @@
   <Content Include="modinfo.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
   </Content>
-</ItemGroup>
-
-<ItemGroup>
-  <PackageReference Include="MathParser.org-mXparser" Version="5.2.1" />
 </ItemGroup>
 
 </Project>

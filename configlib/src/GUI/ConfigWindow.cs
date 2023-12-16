@@ -5,6 +5,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Util;
 using Newtonsoft.Json.Linq;
+using VSImGui;
 
 namespace ConfigLib
 {
@@ -14,31 +15,54 @@ namespace ConfigLib
         private readonly IEnumerable<string> mDomains;
         private int mCurrentIndex = 0;
         private long mNextId = 0;
+        private Style mStyle;
+        private bool mStyleLoaded = false;
 
         public ConfigWindow(ICoreClientAPI api)
         {
             mApi = api;
             mDomains = ConfigLibModSystem.GetDomains();
+            mStyle = new Style();
         }
 
         public bool Draw()
         {
+            LoadStyle();
+
             mNextId = 0;
             bool opened = true;
 
-            ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
-            ImGui.Begin("Configs##configlib", ref opened, ImGuiWindowFlags.MenuBar);
-
-            if (ImGui.BeginMenuBar())
+            using (new StyleApplier(mStyle))
             {
-                if (ImGui.MenuItem("Save")) SaveSettings();
-                ImGui.EndMenuBar();
+                ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
+                ImGui.Begin("Configs##configlib", ref opened, ImGuiWindowFlags.MenuBar);
+                if (ImGui.BeginMenuBar())
+                {
+                    if (ImGui.MenuItem("Save")) SaveSettings();
+                    ImGui.BeginDisabled();
+                    ImGui.MenuItem("Restore (WIP)");
+                    ImGui.MenuItem("Reload (WIP)");
+                    ImGui.MenuItem("Defaults (WIP)");
+                    ImGui.EndDisabled();
+                    ImGui.EndMenuBar();
+                }
+                DrawConfigList();
+
+                ImGui.End();
             }
 
-            DrawConfigList();
-
-            ImGui.End();
+            
             return opened;
+        }
+
+        private void LoadStyle()
+        {
+            if (mStyleLoaded) return;
+
+            mStyle = new Style();
+            mStyle.ColorBackgroundMenuBar = (0, 0, 0, 0);
+            mStyle.BorderFrame = 0;
+            mStyleLoaded = true;
         }
 
         private void DrawConfigList()

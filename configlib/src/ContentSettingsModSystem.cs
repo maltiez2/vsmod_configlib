@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using HarmonyLib;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Client;
@@ -32,6 +34,7 @@ namespace ConfigLib
             if (api.Side == EnumAppSide.Server) Logger = api.Logger;
             if (api.Side == EnumAppSide.Client && Logger == null) Logger = api.Logger;
         }
+        
         public override void AssetsLoaded(ICoreAPI api)
         {
             switch (api.Side)
@@ -55,6 +58,61 @@ namespace ConfigLib
                     }
                     break;
             }
+
+            ReplaceTokens();
+        }
+        static private readonly HashSet<AssetCategory> sCategories = new()
+        {
+            //AssetCategory.blocktypes,
+            //AssetCategory.itemtypes,
+            //AssetCategory.entities,
+            AssetCategory.patches,
+            AssetCategory.recipes
+        };
+        private void ReplaceTokens()
+        {
+            if (mApi == null) return;
+            
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+
+            int failed = 0;
+            int succeeded = 0;
+            int skipped = 0;
+            foreach ((var location, var asset) in mApi.Assets.AllAssets)
+            {
+                if (!sCategories.Contains(location.Category) || (!sDomains.Contains(location.Domain))) continue;
+                try
+                {
+                    string domain = asset.Location.Domain;
+                    byte[] data = asset.Data;
+                    string json = System.Text.Encoding.UTF8.GetString(data);
+                    JArray token = JArray.Parse(json);
+
+                    foreach (var item in token)
+                    {
+                        if (item is not JObject objectItem) continue;
+                        
+                        if (RegistryObjectTokensReplacer.ReplaceInBaseType(domain, objectItem, location.Path))
+                        {
+                            asset.Data = System.Text.Encoding.UTF8.GetBytes(token.ToString());
+                            succeeded++;
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
+                    }
+                }
+                catch
+                {
+                    failed++;
+                }
+            }
+
+            watch.Stop();
+            var elapsedMs = watch.ElapsedMilliseconds;
+
+            mApi?.Logger?.Notification($"[Config lib] [Recipes and patches] Assets patched: {succeeded}, assets not patched: {skipped}, assets were not able to patch: {failed}. Time spent: {elapsedMs}ms");
         }
         public override void AssetsFinalize(ICoreAPI api)
         {
@@ -95,7 +153,6 @@ namespace ConfigLib
             Config config = new(mApi, domain, parsedConfig);
             sConfigs.Add(domain, config);
             sDomains.Add(domain);
-            //mApi.Logger.Notification($"[Config lib] Loaded config for '{domain}'");
 
             StoreConfig(domain, config);
         }

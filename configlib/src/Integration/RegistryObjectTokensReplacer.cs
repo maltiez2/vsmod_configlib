@@ -15,11 +15,14 @@ namespace ConfigLib
             JTokenType.Float
         };
 
-        static public void ReplaceInBaseType(RegistryObjectType baseType)
+        static public void ReplaceInBaseTypePatch(RegistryObjectType baseType)
+        {
+            ReplaceInBaseType(baseType.Code.Domain, baseType.jsonObject, baseType.Code.ToString());
+        }
+
+        static public bool ReplaceInBaseType(string domain, JObject data, string code)
         {
             int tokensReplaced = 0;
-
-            string domain = baseType.Code.Domain;
 
             if (domain == "game")
             {
@@ -27,11 +30,11 @@ namespace ConfigLib
                 {
                     try
                     {
-                        Replace(configDomain, baseType.jsonObject, ref tokensReplaced);
+                        Replace(configDomain, data, ref tokensReplaced);
                     }
                     catch (ConfigLibException exception)
                     {
-                        ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {configDomain}] [target: {baseType.Code}] {exception.Message}");
+                        ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {configDomain}] [target: {code}] {exception.Message}");
                     }
                 }
             }
@@ -39,15 +42,17 @@ namespace ConfigLib
             {
                 try
                 {
-                    Replace(domain, baseType.jsonObject, ref tokensReplaced);
+                    Replace(domain, data, ref tokensReplaced);
                 }
                 catch (ConfigLibException exception)
                 {
-                    ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {domain}] [target: {baseType.Code}] {exception.Message}");
+                    ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {domain}] [target: {code}] {exception.Message}");
                 }
             }
-            
-            if (tokensReplaced > 0) ConfigLibModSystem.Logger?.Notification($"[Config lib] Tokens replaced: {tokensReplaced} in ({baseType.Class}){baseType.Code}");
+
+            if (tokensReplaced > 0) ConfigLibModSystem.Logger?.Notification($"[Config lib] Tokens replaced: {tokensReplaced} in {code}");
+
+            return tokensReplaced > 0;
         }
 
         static private void Replace(string domain, JToken token, ref int tokensReplaced)

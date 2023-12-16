@@ -8,7 +8,7 @@ namespace ConfigLib
         public static void Patch(string harmonyId)
         {
             var OriginalMethod = typeof(ModRegistryObjectTypeLoader).GetMethod("GatherVariantsAndPopulate", AccessTools.all);
-            var PrefixMethod = AccessTools.Method(typeof(RegistryObjectTokensReplacer), nameof(RegistryObjectTokensReplacer.ReplaceInBaseType));
+            var PrefixMethod = AccessTools.Method(typeof(RegistryObjectTokensReplacer), nameof(RegistryObjectTokensReplacer.ReplaceInBaseTypePatch));
             new Harmony(harmonyId).Patch(OriginalMethod, prefix: new HarmonyMethod(PrefixMethod));
         }
 
