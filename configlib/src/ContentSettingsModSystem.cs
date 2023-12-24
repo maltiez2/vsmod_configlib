@@ -27,12 +27,20 @@ namespace ConfigLib
         private GuiManager? mGuiManager;
         private ICoreAPI? mApi;
 
+        internal Dictionary<string, Action> ModWindowsOpen = new();
+
         public override void Start(ICoreAPI api)
         {
             mApi = api;
             HarmonyPatches.Patch("ConfigLib");
             if (api.Side == EnumAppSide.Server) Logger = api.Logger;
             if (api.Side == EnumAppSide.Client && Logger == null) Logger = api.Logger;
+
+            // These  will be called inside each mod
+            // This is just an example
+            RegisterMod("Biomes", new Action(() => { } ));
+            RegisterMod("Barbershop", new Action(() => { }));
+            RegisterMod("Some other mod", new Action(() => { }));
         }
         
         public override void AssetsLoaded(ICoreAPI api)
@@ -173,6 +181,11 @@ namespace ConfigLib
             AssetLocation location = new("configlib", $"config/configlib/{domain}");
             Asset configAsset = new(newData, location, new SettingsOrigin(newData, location));
             mApi?.Assets.Add(location, configAsset);
+        }
+
+        public void RegisterMod(string id, Action action)
+        {
+            ModWindowsOpen.Add(id, action);
         }
     }
 }

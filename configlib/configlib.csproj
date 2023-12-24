@@ -9,9 +9,8 @@
 
   <ItemGroup>
     <Reference Include="ImGui.NET">
-      <HintPath>..\..\VSImGui\Releases\vsimgui\ImGui.NET.dll</HintPath>
+      <HintPath>..\..\..\..\AppData\Roaming\VintagestoryData\Mods\vsimgui_0.2.1\ImGui.NET.dll</HintPath>
       <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <Reference Include="SimpleExpressionEngine">
       <HintPath>..\libs\SimpleExpressionEngine.dll</HintPath>
@@ -23,9 +22,8 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="VSImGui">
-      <HintPath>..\..\VSImGui\Releases\vsimgui\VSImGui.dll</HintPath>
+      <HintPath>..\..\..\..\AppData\Roaming\VintagestoryData\Mods\vsimgui_0.2.1\VSImGui.dll</HintPath>
       <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <Reference Include="VSSurvivalMod">
       <HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>
