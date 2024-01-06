@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq;
+using Vintagestory.API.Common;
 using Vintagestory.ServerMods.NoObf;
 
 namespace ConfigLib
@@ -15,12 +16,12 @@ namespace ConfigLib
             JTokenType.Float
         };
 
-        static public void ReplaceInBaseTypePatch(RegistryObjectType baseType)
+        static public void ReplaceInBaseTypeRegistry(RegistryObjectType baseType, ILogger? logger = null)
         {
-            ReplaceInBaseType(baseType.Code.Domain, baseType.jsonObject, baseType.Code.ToString());
+            ReplaceInBaseType(baseType.Code.Domain, baseType.jsonObject, baseType.Code.ToString(), "registry objects", logger);
         }
 
-        static public bool ReplaceInBaseType(string domain, JObject data, string code)
+        static public bool ReplaceInBaseType(string domain, JObject data, string code, string target, ILogger? logger = null)
         {
             int tokensReplaced = 0;
 
@@ -34,7 +35,7 @@ namespace ConfigLib
                     }
                     catch (ConfigLibException exception)
                     {
-                        ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {configDomain}] [target: {code}] {exception.Message}");
+                        logger?.Error($"[Config lib] Setting by '{configDomain}' for '{code}': {exception.Message}");
                     }
                 }
             }
@@ -46,11 +47,14 @@ namespace ConfigLib
                 }
                 catch (ConfigLibException exception)
                 {
-                    ConfigLibModSystem.Logger?.Error($"[Config lib] [config domain: {domain}] [target: {code}] {exception.Message}");
+                    logger?.Error($"[Config lib] Setting by '{domain}' for '{code}': {exception.Message}");
                 }
             }
 
-            if (tokensReplaced > 0) ConfigLibModSystem.Logger?.Notification($"[Config lib] Tokens replaced: {tokensReplaced} in {code}");
+            if (tokensReplaced > 0)
+            {
+                logger?.VerboseDebug($"[Config lib] ({target}) Tokens replaced: {tokensReplaced} in {code}");
+            }
 
             return tokensReplaced > 0;
         }

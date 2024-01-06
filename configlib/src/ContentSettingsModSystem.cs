@@ -1,5 +1,4 @@
-﻿using HarmonyLib;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,102 +16,29 @@ namespace ConfigLib
         public IEnumerable<string> Domains => sDomains;
         public IConfig? GetConfig(string domain) => GetConfigStatic(domain);
         public ISetting? GetSetting(string domain, string code) => GetConfigStatic(domain)?.GetSetting(code);
+        public void RegisterCustomConfig(string domain, Action<string> drawDelegate) => sCustomConfigs.TryAdd(domain, drawDelegate);
 
         static internal HashSet<string> GetDomains() => sDomains;
         static internal Config? GetConfigStatic(string domain) => sConfigs?.ContainsKey(domain) == true ? sConfigs[domain] : null;
-        static internal ILogger? Logger { get; private set; }
+        static internal Dictionary<string, Action<string>>? GetCustomConfigs() => sCustomConfigs;
 
         static private readonly Dictionary<string, Config> sConfigs = new();
         static private readonly HashSet<string> sDomains = new();
+        static private readonly Dictionary<string, Action<string>> sCustomConfigs = new();
         private GuiManager? mGuiManager;
+        private HarmonyPatches? mPatches;
         private ICoreAPI? mApi;
 
         public override void Start(ICoreAPI api)
         {
             mApi = api;
-            HarmonyPatches.Patch("ConfigLib");
-            if (api.Side == EnumAppSide.Server) Logger = api.Logger;
-            if (api.Side == EnumAppSide.Client && Logger == null) Logger = api.Logger;
+            mPatches = new HarmonyPatches(api).Patch("ConfigLib");
         }
-        
         public override void AssetsLoaded(ICoreAPI api)
         {
-            switch (api.Side)
-            {
-                case EnumAppSide.Server:
-                    foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
-                    {
-                        LoadConfig(asset);
-                    }
-                    break;
-                case EnumAppSide.Client:
-                    foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Location.BeginsWith("configlib", "config/configlib")))
-                    {
-                        RetrieveConfig(asset);
-                    }
-                    break;
-                case EnumAppSide.Universal:
-                    foreach (IAsset asset in api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
-                    {
-                        LoadConfig(asset);
-                    }
-                    break;
-            }
-
-            ReplaceTokens();
-        }
-        static private readonly HashSet<AssetCategory> sCategories = new()
-        {
-            //AssetCategory.blocktypes,
-            //AssetCategory.itemtypes,
-            //AssetCategory.entities,
-            AssetCategory.patches,
-            AssetCategory.recipes
-        };
-        private void ReplaceTokens()
-        {
-            if (mApi == null) return;
-            
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-
-            int failed = 0;
-            int succeeded = 0;
-            int skipped = 0;
-            foreach ((var location, var asset) in mApi.Assets.AllAssets)
-            {
-                if (!sCategories.Contains(location.Category) || (!sDomains.Contains(location.Domain))) continue;
-                try
-                {
-                    string domain = asset.Location.Domain;
-                    byte[] data = asset.Data;
-                    string json = System.Text.Encoding.UTF8.GetString(data);
-                    JArray token = JArray.Parse(json);
-
-                    foreach (var item in token)
-                    {
-                        if (item is not JObject objectItem) continue;
-                        
-                        if (RegistryObjectTokensReplacer.ReplaceInBaseType(domain, objectItem, location.Path))
-                        {
-                            asset.Data = System.Text.Encoding.UTF8.GetBytes(token.ToString());
-                            succeeded++;
-                        }
-                        else
-                        {
-                            skipped++;
-                        }
-                    }
-                }
-                catch
-                {
-                    failed++;
-                }
-            }
-
-            watch.Stop();
-            var elapsedMs = watch.ElapsedMilliseconds;
-
-            mApi?.Logger?.Notification($"[Config lib] [Recipes and patches] Assets patched: {succeeded}, assets not patched: {skipped}, assets were not able to patch: {failed}. Time spent: {elapsedMs}ms");
+            LoadConfigs();
+            PatchAssetsAndLog("patches");
+            PatchAssetsAndLog("recipes");
         }
         public override void AssetsFinalize(ICoreAPI api)
         {
@@ -124,23 +50,134 @@ namespace ConfigLib
         }
         public override double ExecuteOrder()
         {
-            return 0.15; // Before 'ModRegistryObjectTypeLoader'
+            return 0.01;
         }
         public override void Dispose()
         {
-            Logger = null;
             sConfigs.Clear();
             sDomains.Clear();
-            HarmonyPatches.Unpatch("ConfigLib");
+            sCustomConfigs.Clear();
+            mPatches?.Unpatch("ConfigLib");
             if (mApi?.Side == EnumAppSide.Client && mGuiManager != null)
             {
                 mApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows -= mGuiManager.Draw;
                 mGuiManager.Dispose();
             }
-            
+
             base.Dispose();
         }
 
+        private void LoadConfigs()
+        {
+            switch (mApi?.Side)
+            {
+                case EnumAppSide.Server:
+                    foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
+                    {
+                        LoadConfig(asset);
+                    }
+                    break;
+                case EnumAppSide.Client:
+                    foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Location.BeginsWith("configlib", "config/configlib")))
+                    {
+                        RetrieveConfig(asset);
+                    }
+                    break;
+                case EnumAppSide.Universal:
+                    foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "settings-config.json"))
+                    {
+                        LoadConfig(asset);
+                    }
+                    break;
+            }
+        }
+        private void PatchAssetsAndLog(string target)
+        {
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            (int patched, int skipped, int failed) = PatchAssets(target);
+            watch.Stop();
+            long elapsedMs = watch.ElapsedMilliseconds;
+            mApi?.Logger?.Debug($"[Config lib] ({target}) Finish. Assets patched: {patched}, assets not patched: {skipped}, assets were not able to patch: {failed}. Time spent: {elapsedMs}ms");
+        }
+        private (int patched, int skipped, int failed) PatchAssets(string target)
+        {
+            if (mApi == null) return (0, 0, 0);
+
+            (int patched, int skipped, int failed) result = (0, 0, 0);
+
+            List<IAsset> many = mApi.Assets.GetMany(target);
+
+            foreach (IAsset asset in many)
+            {
+                string json = Asset.BytesToString(asset.Data);
+
+                try
+                {
+                    if (PatchArray(ref json, asset.Location, target))
+                    {
+                        asset.Data = System.Text.Encoding.UTF8.GetBytes(json);
+                        result.patched++;
+                    }
+                    else
+                    {
+                        result.skipped++;
+                    }
+                    continue;
+                }
+                catch
+                {
+                    // Will be handled in next block
+                }
+
+                try
+                {
+                    if (PatchObject(ref json, asset.Location, target))
+                    {
+                        asset.Data = System.Text.Encoding.UTF8.GetBytes(json);
+                        result.patched++;
+                    }
+                    else
+                    {
+                        result.skipped++;
+                    }
+                    continue;
+                }
+                catch
+                {
+                    result.failed++;
+                }
+            }
+
+            return result;
+        }
+        private bool PatchArray(ref string json, AssetLocation location, string target)
+        {
+            JArray token = JArray.Parse(json);
+            JObject dummy = new()
+            {
+                {"value", token}
+            };
+
+            if (RegistryObjectTokensReplacer.ReplaceInBaseType(location.Domain, dummy, location.Path, target, mApi?.Logger))
+            {
+                json = dummy["value"]?.ToString() ?? json;
+                return true;
+            }
+
+            return false;
+        }
+        private bool PatchObject(ref string json, AssetLocation location, string target)
+        {
+            JObject token = JObject.Parse(json);
+
+            if (RegistryObjectTokensReplacer.ReplaceInBaseType(location.Domain, token, location.Path, target, mApi?.Logger))
+            {
+                json = token.ToString();
+                return true;
+            }
+
+            return false;
+        }
         private void LoadConfig(IAsset asset)
         {
             if (mApi == null) return;
@@ -165,7 +202,7 @@ namespace ConfigLib
             Config config = new(mApi, packet.Domain, packet.GetSettings());
             sConfigs.TryAdd(packet.Domain, config);
             if (!sDomains.Contains(packet.Domain)) sDomains.Add(packet.Domain);
-            mApi.Logger.Notification($"[Config lib] Loaded config from server assets for '{packet.Domain}'");
+            mApi.Logger.Debug($"[Config lib] Loaded config from server assets for '{packet.Domain}'");
         }
         private void StoreConfig(string domain, Config config)
         {

@@ -1,5 +1,4 @@
-﻿using ImGuiNET;
-using ModdingTools;
+﻿using ModdingTools;
 using System;
 using Vintagestory.API.Client;
 
@@ -20,8 +19,8 @@ namespace ConfigLib
             api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
             api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
 
-            api.Input.RegisterHotKey("configlibdev", "(Config lib) Open developer configs window", GlKeys.P, HotkeyType.DevTool, false, false, true);
-            api.Input.SetHotKeyHandler("configlibdev", ShowDevConfigWindow);
+            //api.Input.RegisterHotKey("configlibdev", "(Config lib) Open developer configs window", GlKeys.P, HotkeyType.DevTool, false, false, true);
+            //api.Input.SetHotKeyHandler("configlibdev", ShowDevConfigWindow);
 
             dialog = new VanillaGuiDialog(api);
 

@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Datastructures;
-using Vintagestory.API.Util;
 using Newtonsoft.Json.Linq;
 using VSImGui;
+using System;
+using HarmonyLib;
 
 namespace ConfigLib
 {
@@ -13,6 +14,8 @@ namespace ConfigLib
     {
         private readonly ICoreClientAPI mApi;
         private readonly IEnumerable<string> mDomains;
+        private readonly Dictionary<string, Action<string>> mCustom;
+        private readonly HashSet<string> mMods = new();
         private int mCurrentIndex = 0;
         private long mNextId = 0;
         private Style mStyle;
@@ -22,13 +25,23 @@ namespace ConfigLib
         {
             mApi = api;
             mDomains = ConfigLibModSystem.GetDomains();
+            mCustom = ConfigLibModSystem.GetCustomConfigs() ?? new();
+
+            foreach (string mod in mDomains)
+            {
+                mMods.Add(mod);
+            }
+            foreach (string mod in mCustom.Keys)
+            {
+                if (!mMods.Contains(mod)) mMods.Add(mod);
+            }
+
             mStyle = new Style();
+            LoadStyle();
         }
 
         public bool Draw()
         {
-            LoadStyle();
-
             mNextId = 0;
             bool opened = true;
 
@@ -51,7 +64,6 @@ namespace ConfigLib
                 ImGui.End();
             }
 
-            
             return opened;
         }
 
@@ -69,7 +81,7 @@ namespace ConfigLib
         {
             string filter = "";
             ImGui.InputTextWithHint("Mods configs##configlib", "filter (supports wildcards)", ref filter, 100);
-            FilterMods(filter, out string[] domains, out string[] names);
+            FilterMods(StyleEditor.WildCardToRegular(filter), out string[] domains, out string[] names);
             ImGui.ListBox($"##modslist.configlib", ref mCurrentIndex, names, domains.Length, 5);
             ImGui.NewLine();
             ImGui.BeginChild("##configlibdomainconfig", new(0, 0), true);
@@ -90,7 +102,7 @@ namespace ConfigLib
 
         private void FilterMods(string filter, out string[] domains, out string[] names)
         {
-            domains = mDomains.ToArray();
+            domains = mMods.ToArray();
             names = GetNames();
 
             if (filter == "") return;
@@ -100,7 +112,7 @@ namespace ConfigLib
 
             for (int index = 0; index < domains.Length; index++)
             {
-                if (WildcardUtil.Match(filter, names[index]))
+                if (StyleEditor.Match(filter, names[index]))
                 {
                     newDomains.Add(domains[index]);
                     newNames.Add(names[index]);
@@ -123,14 +135,23 @@ namespace ConfigLib
 
         private void DrawDomainTab(string domain)
         {
-            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
-            if (config != null)
+            if (mDomains.Contains(domain))
             {
-                DrawModConfig(config);
+                Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+                if (config != null)
+                {
+                    ImGui.Text("To apply changes press 'Save' and re-enter the world");
+                    DrawModConfig(config);
+                }
+                else
+                {
+                    ImGui.Text("\nConfig is unavailable\n");
+                }
             }
-            else
+            
+            if (mCustom.ContainsKey(domain))
             {
-                ImGui.Text("\nConfig is unavailable\n");
+                mCustom[domain]?.Invoke($"configlib:{mNextId++}");
             }
         }
 

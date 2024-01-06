@@ -6,7 +6,7 @@
         "Maltiez"
     ],
     "description": "Configs for content mods",
-    "version": "0.2.0",
+    "version": "0.2.5",
     "dependencies": {
         "game": "1.18.8",
         "vsimgui": "0.1.1"

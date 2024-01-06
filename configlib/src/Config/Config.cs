@@ -13,6 +13,7 @@ namespace ConfigLib
         public string ConfigFilePath { get; private set; }
         public string ConfigFileContent => mYamlConfig;
         public bool LoadedFromFile { get; private set; }
+        public JsonObject Definition => mDefinition;
 
         private readonly ICoreAPI mApi;
         private readonly string mDomain;
@@ -20,7 +21,6 @@ namespace ConfigLib
         private readonly TokenReplacer? mReplacer;
         private readonly JsonObject mDefinition;
         private string mYamlConfig;
-        
 
 
         public Config(ICoreAPI api, string domain, JsonObject definition)
@@ -37,13 +37,13 @@ namespace ConfigLib
                 UpdateValues(DeserializeYaml(mYamlConfig));
                 using StreamWriter outputFile = new(ConfigFilePath);
                 outputFile.Write(mYamlConfig);
-                mApi.Logger.Notification($"[Config lib] [config domain: {domain}] Settings loaded: {mSettings.Count}");
+                mApi.Logger.Notification($"[Config lib] ({domain}) Settings loaded: {mSettings.Count}");
                 mReplacer = new(mSettings);
                 LoadedFromFile = true;
             }
             catch (ConfigLibException exception)
             {
-                mApi.Logger.Error($"[Config lib] [config domain: {domain}] Error on parsing config: {exception.Message}.");
+                mApi.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
                 mSettings = new();
                 mYamlConfig = "<failed to load>";
                 LoadedFromFile = false;
@@ -139,7 +139,7 @@ namespace ConfigLib
 
                 if (setting.Validation?.Mapping == null)
                 {
-                    setting.Value = new(values[setting.YamlCode]);
+                    setting.Value = new(ConvertValue(values[setting.YamlCode], setting.JsonType));
                     continue;
                 }
 
@@ -150,6 +150,25 @@ namespace ConfigLib
                     setting.Value = setting.Validation.Mapping[key];
                     setting.MappingKey = key;
                 }
+            }
+        }
+        private JToken ConvertValue(JToken? value, JTokenType type)
+        {
+            string? strValue = (string?)(value as JValue)?.Value;
+            if (strValue == null) return value ?? new JValue(strValue);
+            switch (type)
+            {
+                case JTokenType.Integer:
+                    int intValue = int.Parse(strValue);
+                    return new JValue(intValue);
+                case JTokenType.Boolean:
+                    bool boolValue = bool.Parse(strValue);
+                    return new JValue(boolValue);
+                case JTokenType.Float:
+                    float floatValue = float.Parse(strValue);
+                    return new JValue(floatValue);
+                default:
+                    return value ?? new JValue(strValue);
             }
         }
         private void WriteValues(JObject values)
