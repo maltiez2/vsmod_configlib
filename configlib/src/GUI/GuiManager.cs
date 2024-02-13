@@ -8,29 +8,22 @@ namespace ConfigLib
     {
         private readonly GuiDialog dialog;
         private readonly ConfigWindow mConfigWindow;
-        private readonly DevWindow mDevWindow;
 
         private bool mDisposed;
         private bool mShowConfig = false;
-        private bool mShowDev = false;
 
         public GuiManager(ICoreClientAPI api)
         {
             api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
             api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
 
-            //api.Input.RegisterHotKey("configlibdev", "(Config lib) Open developer configs window", GlKeys.P, HotkeyType.DevTool, false, false, true);
-            //api.Input.SetHotKeyHandler("configlibdev", ShowDevConfigWindow);
-
             dialog = new VanillaGuiDialog(api);
 
             mConfigWindow = new(api);
-            mDevWindow = new(api);
         }
 
         public void Draw()
         {
-            if (mShowDev) mDevWindow.Draw();
             if (mShowConfig && !mConfigWindow.Draw())
             {
                 dialog.TryClose();
@@ -38,21 +31,6 @@ namespace ConfigLib
             }
         }
 
-        private bool ShowDevConfigWindow(KeyCombination keyCombination)
-        {
-            if (dialog?.IsOpened() == true)
-            {
-                dialog.TryClose();
-                mShowDev = false;
-            }
-            else
-            {
-                dialog?.TryOpen();
-                mShowDev = true;
-            }
-
-            return true;
-        }
         private bool ShowConfigWindow(KeyCombination keyCombination)
         {
             if (dialog?.IsOpened() == true)

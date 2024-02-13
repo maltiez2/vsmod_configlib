@@ -6,9 +6,12 @@
         "Maltiez"
     ],
     "description": "Configs for content mods",
-    "version": "0.2.5",
+    "version": "0.4.2",
     "dependencies": {
-        "game": "1.18.8",
-        "vsimgui": "0.1.1"
-    }
+        "game": "1.19.0",
+        "vsimgui": "0.3.3"
+    },
+    "side" : "Universal",
+    "requiredOnClient": false,
+    "requiredOnServer": false
 }

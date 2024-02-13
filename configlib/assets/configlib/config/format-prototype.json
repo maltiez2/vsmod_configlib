@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "patches": {
+    "boolean": {
+      "game:recipes/grid/spear": {
+        "0/enanle": "SETTING_0"
+      }
+    },
+    "number": {
+      "game:itemtypes/tool/blade-*": {
+        "attributes/durability": "SETTING_2 * 10 + 100",
+        "attributes/damage": "SETTING_4 * 10"
+      }
+    },
+    "other": {
+      "game:recipes/grid/spear": {
+        "0/enanle": "SETTING_5"
+      }
+    },
+    "const": {
+      "game:recipes/grid/falx": {
+        "0/enanle": false
+      }
+    }
+  },
+  "settings": {
+    "boolean": {
+      "SETTING_0": {
+        "name": "yaml-setting-0",
+        "comment": "Some optional desctiption",
+        "default": false
+      },
+      "SETTING_1": {
+        "name": "yaml-setting-1",
+        "comment": "Some optional desctiption",
+        "default": "Hard",
+        "mapping": {
+          "Hard": true,
+          "Easy": false
+        }
+      }
+    },
+    "number": {
+      "SETTING_2": {
+        "name": "yaml-setting-2",
+        "comment": "Some optional desctiption",
+        "default": 0.3,
+        "range": {
+          "min": -0.1,
+          "max": 0.5,
+          "step": 0.2
+        }
+      },
+      "SETTING_3": {
+        "name": "yaml-setting-3",
+        "comment": "Some optional desctiption",
+        "default": 0.3,
+        "values": [
+          -0.1,
+          0.1,
+          0.3,
+          0.5
+        ]
+      },
+      "SETTING_4": {
+        "name": "yaml-setting-4",
+        "comment": "Some optional desctiption",
+        "default": "Easy",
+        "mapping": {
+          "Easy": 0.1,
+          "Hard": 0.5
+        }
+      }
+    },
+    "other": {
+      "SETTING_5": {
+        "name": "yaml-setting-name-5",
+        "default": "FirstKey",
+        "validation": {
+          "mapping": {
+            "FirstKey": { "field": "value" },
+            "SecondKey": [0, 1, 2]
+          }
+        }
+      }
+    }
+  }
+}

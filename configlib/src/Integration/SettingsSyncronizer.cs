@@ -1,8 +1,11 @@
-﻿using ProtoBuf;
+﻿using Newtonsoft.Json.Linq;
+using ProtoBuf;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.Server;
+using Vintagestory.Common;
 
 namespace ConfigLib
 {
@@ -11,10 +14,11 @@ namespace ConfigLib
     {
         public string Domain { get; set; } = "";
         public Dictionary<string, ConfigSettingPacket> Settings { get; set; } = new();
+        public byte[] Definition { get; set; } = System.Array.Empty<byte>();
 
         public SettingsPacket() { }
 
-        public SettingsPacket(string domain, Dictionary<string, ConfigSetting> settings)
+        public SettingsPacket(string domain, Dictionary<string, ConfigSetting> settings, JsonObject definition)
         {
             Dictionary<string, ConfigSettingPacket> serialized = new();
             foreach ((string key, var value) in settings)
@@ -22,6 +26,7 @@ namespace ConfigLib
                 serialized.Add(key, new(value));
             }
 
+            Definition = System.Text.Encoding.UTF8.GetBytes(definition.ToString());
             Settings = serialized;
             Domain = domain;
         }
@@ -39,7 +44,7 @@ namespace ConfigLib
 
     public class SettingsSynchronizer
     {
-        public delegate void SettingsHandler(string domain, Dictionary<string, ConfigSetting> settings);
+        public delegate void SettingsHandler(string domain, Dictionary<string, ConfigSetting> settings, JsonObject definition);
 
         private readonly SettingsHandler mHandler;
 
@@ -73,7 +78,7 @@ namespace ConfigLib
                 deserialized.Add(key, new (value));
             }
 
-            mHandler(packet.Domain, deserialized);
+            mHandler(packet.Domain, deserialized, new(JObject.Parse(Asset.BytesToString(packet.Definition))));
         }
 
         // SERVER SIDE
@@ -85,7 +90,7 @@ namespace ConfigLib
             mServerNetworkChannel = api.Network.RegisterChannel(channelName)
             .RegisterMessageType<SettingsPacket>();
         }
-        public void SendPacket(string domain, Dictionary<string, ConfigSetting> settings, IServerPlayer player)
+        public void SendPacket(string domain, Dictionary<string, ConfigSetting> settings, JsonObject definition, IServerPlayer player)
         {
             if (mServerNetworkChannel == null) return;
 
@@ -98,7 +103,8 @@ namespace ConfigLib
             SettingsPacket packet = new()
             {
                 Settings = serialized,
-                Domain = domain
+                Domain = domain,
+                Definition = System.Text.Encoding.UTF8.GetBytes(definition.ToString())
             };
 
             mServerNetworkChannel.SendPacket(packet, player);

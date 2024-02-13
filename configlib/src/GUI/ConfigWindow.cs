@@ -6,337 +6,497 @@ using Vintagestory.API.Datastructures;
 using Newtonsoft.Json.Linq;
 using VSImGui;
 using System;
-using HarmonyLib;
+using Vintagestory.API.MathTools;
 
-namespace ConfigLib
+namespace ConfigLib;
+
+public struct ControlButtons
 {
-    internal class ConfigWindow
+    public bool Save { get; set; } = false;
+    public bool Restore { get; set; } = false;
+    public bool Reload { get; set; } = false;
+    public bool Defaults { get; set; } = false;
+
+    public ControlButtons() { }
+
+    public void Reset()
     {
-        private readonly ICoreClientAPI mApi;
-        private readonly IEnumerable<string> mDomains;
-        private readonly Dictionary<string, Action<string>> mCustom;
-        private readonly HashSet<string> mMods = new();
-        private int mCurrentIndex = 0;
-        private long mNextId = 0;
-        private Style mStyle;
-        private bool mStyleLoaded = false;
+        Save = false;
+        Restore = false;
+        Defaults = false;
+        Reload = false;
+    }
+}
 
-        public ConfigWindow(ICoreClientAPI api)
+internal class ConfigWindow
+{
+    private readonly ICoreClientAPI mApi;
+    private readonly IEnumerable<string> mDomains;
+    private readonly Dictionary<string, Action<string, ControlButtons>> mCustom;
+    private readonly HashSet<string> mMods = new();
+    private readonly HashSet<int> mUnsavedDomains = new();
+    private int mCurrentIndex = 0;
+    private long mNextId = 0;
+    private Style mStyle;
+    private bool mStyleLoaded = false;
+    private ControlButtons mControlButtons = new();
+    private bool mUnsavedChanges = false;
+    private bool mCustomConfig = false;
+    private string mFilter = "";
+
+    public ConfigWindow(ICoreClientAPI api)
+    {
+        mApi = api;
+        mDomains = ConfigLibModSystem.GetDomains();
+        mCustom = ConfigLibModSystem.GetCustomConfigs() ?? new();
+
+        foreach (string mod in mDomains)
         {
-            mApi = api;
-            mDomains = ConfigLibModSystem.GetDomains();
-            mCustom = ConfigLibModSystem.GetCustomConfigs() ?? new();
-
-            foreach (string mod in mDomains)
-            {
-                mMods.Add(mod);
-            }
-            foreach (string mod in mCustom.Keys)
-            {
-                if (!mMods.Contains(mod)) mMods.Add(mod);
-            }
-
-            mStyle = new Style();
-            LoadStyle();
+            mMods.Add(mod);
+        }
+        foreach (string mod in mCustom.Keys)
+        {
+            if (!mMods.Contains(mod)) mMods.Add(mod);
         }
 
-        public bool Draw()
-        {
-            mNextId = 0;
-            bool opened = true;
+        mStyle = new Style();
+        LoadStyle();
+    }
 
-            using (new StyleApplier(mStyle))
+    public bool Draw()
+    {
+        mNextId = 0;
+        bool opened = true;
+        mControlButtons.Reset();
+
+        using (new StyleApplier(mStyle))
+        {
+            ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
+            ImGuiWindowFlags flags = ImGuiWindowFlags.MenuBar;
+            if (mUnsavedChanges) flags |= ImGuiWindowFlags.UnsavedDocument;
+            ImGui.Begin("Configs##configlib", ref opened, flags);
+            if (ImGui.BeginMenuBar())
             {
-                ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
-                ImGui.Begin("Configs##configlib", ref opened, ImGuiWindowFlags.MenuBar);
-                if (ImGui.BeginMenuBar())
+                if (!mUnsavedChanges) ImGui.BeginDisabled();
+                if (ImGui.MenuItem("Save All"))
                 {
-                    if (ImGui.MenuItem("Save")) SaveSettings();
-                    ImGui.BeginDisabled();
-                    ImGui.MenuItem("Restore (WIP)");
-                    ImGui.MenuItem("Reload (WIP)");
-                    ImGui.MenuItem("Defaults (WIP)");
-                    ImGui.EndDisabled();
-                    ImGui.EndMenuBar();
+                    mControlButtons.Save = true;
+                    SaveAll();
                 }
-                DrawConfigList();
-
-                ImGui.End();
-            }
-
-            return opened;
-        }
-
-        private void LoadStyle()
-        {
-            if (mStyleLoaded) return;
-
-            mStyle = new Style();
-            mStyle.ColorBackgroundMenuBar = (0, 0, 0, 0);
-            mStyle.BorderFrame = 0;
-            mStyleLoaded = true;
-        }
-
-        private void DrawConfigList()
-        {
-            string filter = "";
-            ImGui.InputTextWithHint("Mods configs##configlib", "filter (supports wildcards)", ref filter, 100);
-            FilterMods(StyleEditor.WildCardToRegular(filter), out string[] domains, out string[] names);
-            ImGui.ListBox($"##modslist.configlib", ref mCurrentIndex, names, domains.Length, 5);
-            ImGui.NewLine();
-            ImGui.BeginChild("##configlibdomainconfig", new(0, 0), true);
-            if (domains.Length > mCurrentIndex) DrawDomainTab(domains[mCurrentIndex]);
-            ImGui.EndChild();
-        }
-
-        private void SaveSettings()
-        {
-            foreach (string domain in mDomains)
-            {
-                Config? config = ConfigLibModSystem.GetConfigStatic(domain);
-                config?.WriteToFile();
-            }
-        }
-
-        private string Title(string name) => $"{name}##configlib:{mNextId++}";
-
-        private void FilterMods(string filter, out string[] domains, out string[] names)
-        {
-            domains = mMods.ToArray();
-            names = GetNames();
-
-            if (filter == "") return;
-
-            List<string> newDomains = new();
-            List<string> newNames = new();
-
-            for (int index = 0; index < domains.Length; index++)
-            {
-                if (StyleEditor.Match(filter, names[index]))
+                if (!mUnsavedChanges) ImGui.EndDisabled();
+                DrawItemHint($"Saves all configs to files.");
+                /*if (mUnsavedChanges) ImGui.BeginDisabled();
+                if (ImGui.MenuItem("Restore All"))
                 {
-                    newDomains.Add(domains[index]);
-                    newNames.Add(names[index]);
+                    mControlButtons.Restore = true;
+                    RestoreAll();
                 }
+                DrawItemHint($"Retrieves values from config files.");
+                if (mUnsavedChanges) ImGui.EndDisabled();*/
+                ImGui.EndMenuBar();
             }
+            DrawConfigList();
 
-            domains = newDomains.ToArray();
-            names = newNames.ToArray();
+            ImGui.End();
         }
 
-        private string[] GetNames()
+        if (!opened) SaveAll();
+
+        return opened;
+    }
+
+    public void SaveAll()
+    {
+        foreach (string domain in mDomains)
         {
-            List<string> names = new();
-            foreach (string domain in mDomains)
+            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+            config?.WriteToFile();
+        }
+        mUnsavedDomains.Clear();
+        mUnsavedChanges = false;
+    }
+
+    public void RestoreAll()
+    {
+        foreach (string domain in mDomains)
+        {
+            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+            config?.UpdateFromFile();
+        }
+    }
+
+    private void LoadStyle()
+    {
+        if (mStyleLoaded) return;
+
+        mStyle = new Style();
+        mStyle.ColorBackgroundMenuBar = (0, 0, 0, 0);
+        mStyle.BorderFrame = 0;
+        mStyleLoaded = true;
+    }
+
+    private void DrawConfigList()
+    {
+        ImGui.InputTextWithHint("Mods configs##configlib", "filter (supports wildcards)", ref mFilter, 100);
+        FilterMods(StyleEditor.WildCardToRegular(mFilter), out string[] domains, out string[] names);
+        ImGui.ListBox($"##modslist.configlib", ref mCurrentIndex, names, domains.Length, 5);
+        ImGui.NewLine();
+        ImGui.BeginChild("##configlibdomainconfig", new(0, 0), true, ImGuiWindowFlags.MenuBar);
+        if (domains.Length > mCurrentIndex) DrawDomainTab(domains[mCurrentIndex]);
+        ImGui.EndChild();
+    }
+
+    private void SaveSettings(string domain)
+    {
+        if (!mDomains.Contains(domain)) return;
+
+        Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+        config?.WriteToFile();
+
+        if (mUnsavedDomains.Contains(mCurrentIndex)) mUnsavedDomains.Remove(mCurrentIndex);
+        if (!mUnsavedDomains.Any()) mUnsavedChanges = false;
+    }
+    private void RestoreSettings(string domain)
+    {
+        if (!mDomains.Contains(domain)) return;
+
+        Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+        config?.UpdateFromFile();
+
+        SetUnsavedChanges();
+    }
+    private void DefaultSettings(string domain)
+    {
+        if (!mDomains.Contains(domain)) return;
+
+        Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+        config?.RestoreToDefault();
+
+        SetUnsavedChanges();
+    }
+
+    private string Title(string name) => $"{name}##configlib:{mNextId++}";
+
+    private void FilterMods(string filter, out string[] domains, out string[] names)
+    {
+        domains = mMods.ToArray();
+        names = mMods.Select((domain) => mApi.ModLoader.GetMod(domain).Info.Name).ToArray();
+
+        if (filter == "") return;
+
+        List<string> newDomains = new();
+        List<string> newNames = new();
+
+        for (int index = 0; index < domains.Length; index++)
+        {
+            if (StyleEditor.Match(filter, names[index]))
             {
-                names.Add(mApi.ModLoader.GetMod(domain).Info.Name);
+                newDomains.Add(domains[index]);
+                newNames.Add(names[index]);
             }
-            return names.ToArray();
         }
 
-        private void DrawDomainTab(string domain)
+        domains = newDomains.ToArray();
+        names = newNames.ToArray();
+    }
+
+    private void DrawDomainTab(string domain)
+    {
+        if (ImGui.BeginMenuBar())
         {
-            if (mDomains.Contains(domain))
+            if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.BeginDisabled();
+            if (ImGui.MenuItem("Save"))
             {
-                Config? config = ConfigLibModSystem.GetConfigStatic(domain);
-                if (config != null)
-                {
-                    ImGui.Text("To apply changes press 'Save' and re-enter the world");
-                    DrawModConfig(config);
-                }
-                else
-                {
-                    ImGui.Text("\nConfig is unavailable\n");
-                }
+                mControlButtons.Save = true;
+                SaveSettings(domain);
             }
+            if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.EndDisabled();
+            DrawItemHint($"Saves changes to config file.");
             
-            if (mCustom.ContainsKey(domain))
-            {
-                mCustom[domain]?.Invoke($"configlib:{mNextId++}");
-            }
-        }
-
-        private void DrawModConfig(Config config)
-        {
-            ImGui.PushItemWidth(250);
-            foreach ((string name, ConfigSetting setting) in config.Settings)
-            {
-                if (setting.Validation != null)
-                {
-                    DrawValidatedSetting(setting.YamlCode, setting);
-                }
-                else
-                {
-                    switch (setting.JsonType)
-                    {
-                        case JTokenType.Integer:
-                            DrawIntegerSetting(setting.YamlCode, setting);
-                            break;
-                        case JTokenType.Float:
-                            DrawFloatSetting(setting.YamlCode, setting);
-                            break;
-                        case JTokenType.String:
-                            DrawStringSetting(setting.YamlCode, setting);
-                            break;
-                        case JTokenType.Boolean:
-                            DrawBooleanSetting(setting.YamlCode, setting);
-                            break;
-                        default:
-                            ImGui.Text($"{setting.YamlCode}: unavailable");
-                            break;
-                    }
-                }
-
-                DrawHint(setting);
-            }
-            ImGui.PopItemWidth();
-        }
-
-        private void DrawHint(ConfigSetting setting)
-        {
-            if (setting.Comment == null) return;
             
-            ImGui.SameLine();
-            ImGui.TextDisabled("(?)");
-            if (ImGui.BeginItemTooltip())
+            if (ImGui.MenuItem("Restore"))
             {
-                ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35f);
-                ImGui.TextUnformatted(setting.Comment);
-                ImGui.PopTextWrapPos();
-                
-                ImGui.EndTooltip();
+                mControlButtons.Restore = true;
+                RestoreSettings(domain);
+            }
+            DrawItemHint($"Retrieves values from config file.");
+            
+            
+            if (!mCustom.ContainsKey(domain)) ImGui.BeginDisabled();
+            if (ImGui.MenuItem("Reload"))
+            {
+                mControlButtons.Reload = true;
+            }
+            DrawItemHint($"Applies settings changes (if the mod supports this feature)");
+            
+            
+            if (!mCustom.ContainsKey(domain)) ImGui.EndDisabled();
+            if (ImGui.MenuItem("Defaults"))
+            {
+                mControlButtons.Defaults = true;
+                DefaultSettings(domain);
+            }
+            DrawItemHint($"Sets settings to default values");
+            
+            
+            ImGui.EndMenuBar();
+        }
+
+        if (mDomains.Contains(domain))
+        {
+            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+            if (config != null)
+            {
+                ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world");
+                ImGui.Separator();
+                DrawModConfig(config);
+            }
+            else
+            {
+                ImGui.Text("\nConfig is unavailable\n");
             }
         }
+
+        mCustomConfig = false;
+        if (mCustom.ContainsKey(domain))
+        {
+            ImGui.Separator();
+            mCustom[domain]?.Invoke($"configlib:{mNextId++}", mControlButtons);
+            mCustomConfig = true;
+        }
+    }
+
+    private void DrawModConfig(Config config)
+    {
+        ImGui.PushItemWidth(250);
+        foreach ((_, ConfigSetting setting) in config.Settings)
+        {
+            if (setting.Validation != null)
+            {
+                DrawValidatedSetting(setting.YamlCode, setting);
+            }
+            else
+            {
+                switch (setting.SettingType)
+                {
+                    case ConfigSettingType.Boolean:
+                        DrawBooleanSetting(setting.YamlCode, setting);
+                        break;
+                    case ConfigSettingType.Integer:
+                        DrawIntegerSetting(setting.YamlCode, setting);
+                        break;
+                    case ConfigSettingType.Float:
+                        DrawFloatSetting(setting.YamlCode, setting);
+                        break;
+                    default:
+                        ImGui.TextDisabled($"{setting.YamlCode}: unavailable");
+                        break;
+                }
+            }
+
+            DrawHint(setting);
+        }
+        ImGui.PopItemWidth();
+    }
+
+    private void DrawHint(ConfigSetting setting)
+    {
+        if (setting.Comment == null) return;
         
-        private void DrawValidatedSetting(string name, ConfigSetting setting)
+        ImGui.SameLine();
+        ImGui.TextDisabled("(?)");
+        if (ImGui.BeginItemTooltip())
         {
-            bool mapping = setting.Validation?.Mapping != null;
-            bool values = setting.Validation?.Values != null;
-            bool minmax = setting.Validation?.Minimum != null || setting.Validation?.Maximum != null;
-
-            if (mapping)
-            {
-                DrawMappingSetting(name, setting);
-            }
-            else if (values)
-            {
-                DrawValuesSetting(name, setting);
-            }
-            else if (minmax)
-            {
-                DrawMinMaxSetting(name, setting);
-            }
-            else
-            {
-                ImGui.Text($"{name}: unavailable");
-            }
-        }
-
-        private void DrawMappingSetting(string name, ConfigSetting setting)
-        {
-            if (setting.Validation?.Mapping == null || setting.MappingKey == null) return;
-            string[] values = setting.Validation.Mapping.Keys.ToArray();
-            setting.MappingKey = values[DrawComboBox(Title(name), setting.MappingKey, values)];
-        }
-
-        private void DrawValuesSetting(string name, ConfigSetting setting)
-        {
-            if (setting.Validation?.Values == null) return;
-            string[] values = setting.Validation.Values.Select((value) => value.Token.ToString()).ToArray();
-            string value = setting.Value.ToString();
-            int index = DrawComboBox(Title(name), value, values);
-            setting.Value = setting.Validation.Values[index];
-        }
-
-        private void DrawMinMaxSetting(string name, ConfigSetting setting)
-        {
-            switch (setting.JsonType)
-            {
-                case JTokenType.Integer:
-                    DrawIntegerMinMaxSetting(name, setting);
-                    break;
-                case JTokenType.Float:
-                    DrawFloatMinMaxSetting(name, setting);
-                    break;
-                default:
-                    ImGui.Text($"{name}: unavailable");
-                    break;
-            }
-        }
-
-        private void DrawIntegerMinMaxSetting(string name, ConfigSetting setting)
-        {
-            if (setting?.Validation == null) return;
+            ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35f);
+            ImGui.TextUnformatted(setting.Comment);
+            ImGui.PopTextWrapPos();
             
-            int value = setting.Value.AsInt();
-            int? min = setting.Validation.Minimum?.AsInt();
-            int? max = setting.Validation.Maximum?.AsInt();
-
-            if (min != null && max != null)
-            {
-                ImGui.SliderInt(Title(name), ref value, min.Value, max.Value);
-            }
-            else
-            {
-                ImGui.DragInt(Title(name), ref value, 1, min ?? int.MinValue, max ?? int.MaxValue);
-            }
-
-            setting.Value = new JsonObject(new JValue(value));
+            ImGui.EndTooltip();
         }
+    }
+    
+    private void DrawValidatedSetting(string name, ConfigSetting setting)
+    {
+        bool mapping = setting.Validation?.Mapping != null;
+        bool values = setting.Validation?.Values != null;
+        bool minmax = setting.Validation?.Minimum != null || setting.Validation?.Maximum != null;
 
-        private void DrawFloatMinMaxSetting(string name, ConfigSetting setting)
+        if (mapping)
         {
-            if (setting?.Validation == null) return;
-
-            float value = setting.Value.AsFloat();
-            float? min = setting.Validation.Minimum?.AsFloat();
-            float? max = setting.Validation.Maximum?.AsFloat();
-
-            if (min != null && max != null)
-            {
-                ImGui.SliderFloat(Title(name), ref value, min.Value, max.Value);
-            }
-            else
-            {
-                ImGui.DragFloat(Title(name), ref value, 1, min ?? float.MinValue, max ?? float.MaxValue);
-            }
-
-            setting.Value = new JsonObject(new JValue(value));
+            DrawMappingSetting(name, setting);
         }
-
-        private void DrawIntegerSetting(string name, ConfigSetting setting)
+        else if (values)
         {
-            int value = setting.Value.AsInt();
-            ImGui.DragInt(Title(name), ref value);
-            setting.Value = new JsonObject(new JValue(value));
+            DrawValuesSetting(name, setting);
+        }
+        else if (minmax)
+        {
+            DrawMinMaxSetting(name, setting);
+        }
+        else
+        {
+            ImGui.Text($"{name}: unavailable");
+        }
+    }
+
+    private void DrawMappingSetting(string name, ConfigSetting setting)
+    {
+        if (setting.Validation?.Mapping == null || setting.MappingKey == null) return;
+        string[] values = setting.Validation.Mapping.Keys.ToArray();
+        setting.MappingKey = values[DrawComboBox(Title(name), setting.MappingKey, values)];
+    }
+
+    private void DrawValuesSetting(string name, ConfigSetting setting)
+    {
+        if (setting.Validation?.Values == null) return;
+        string[] values = setting.Validation.Values.Select((value) => value.Token.ToString()).ToArray();
+        string value = setting.Value.ToString();
+        int index = DrawComboBox(Title(name), value, values);
+        setting.Value = setting.Validation.Values[index];
+    }
+
+    private void DrawMinMaxSetting(string name, ConfigSetting setting)
+    {
+        switch (setting.Value.Token.Type)
+        {
+            case JTokenType.Integer:
+                DrawIntegerMinMaxSetting(name, setting);
+                break;
+            case JTokenType.Float:
+                DrawFloatMinMaxSetting(name, setting);
+                break;
+            default:
+                ImGui.Text($"{name}: unavailable");
+                break;
+        }
+    }
+
+    private void DrawIntegerMinMaxSetting(string name, ConfigSetting setting)
+    {
+        if (setting?.Validation == null) return;
+        
+        int value = setting.Value.AsInt();
+        int? min = setting.Validation.Minimum?.AsInt();
+        int? max = setting.Validation.Maximum?.AsInt();
+        int? step = setting.Validation.Step?.AsInt();
+
+        int previous = value;
+        if (min != null && max != null)
+        {
+            ImGui.SliderInt(Title(name), ref value, min.Value, max.Value);
+            StepInt(ref value, min, max, step);
+        }
+        else
+        {
+            ImGui.DragInt(Title(name), ref value, 1, min ?? int.MinValue, max ?? int.MaxValue);
+            StepInt(ref value, min, max, step);
+        }
+        if (previous != value) SetUnsavedChanges();
+
+        setting.Value = new JsonObject(new JValue(value));
+    }
+
+    private void StepInt(ref int value, int? min, int? max, int? step)
+    {
+        if (step == null || step == 0) return;
+        int stepValue = step.Value;
+        int stepPoint = min ?? max ?? 0;
+
+        value = (value - stepPoint) / stepValue * stepValue + stepPoint;
+    }
+
+    private void DrawFloatMinMaxSetting(string name, ConfigSetting setting)
+    {
+        if (setting?.Validation == null) return;
+
+        float value = setting.Value.AsFloat();
+        float? min = setting.Validation.Minimum?.AsFloat();
+        float? max = setting.Validation.Maximum?.AsFloat();
+        float? step = setting.Validation.Step?.AsFloat();
+
+        if (step != null && step % 1 == 0 && (min != null && min % 1 == 0 || max != null && max % 1 == 0))
+        {
+            DrawIntegerSetting(name, setting);
+            return;
         }
 
-        private void DrawFloatSetting(string name, ConfigSetting setting)
+        float previous = value;
+        if (min != null && max != null)
         {
-            float value = setting.Value.AsFloat();
-            ImGui.DragFloat(Title(name), ref value);
-            setting.Value = new JsonObject(new JValue(value));
+            ImGui.SliderFloat(Title(name), ref value, min.Value, max.Value);
+            StepFloat(ref value, min, max, step);
         }
+        else
+        {
+            ImGui.DragFloat(Title(name), ref value, 1, min ?? float.MinValue, max ?? float.MaxValue);
+            StepFloat(ref value, min, max, step);
+        }
+        if (previous != value) SetUnsavedChanges();
 
-        private void DrawBooleanSetting(string name, ConfigSetting setting)
-        {
-            bool value = setting.Value.AsBool();
-            ImGui.Checkbox(Title(name), ref value);
-            setting.Value = new JsonObject(new JValue(value));
-        }
+        setting.Value = new JsonObject(new JValue(value));
+    }
 
-        private void DrawStringSetting(string name, ConfigSetting setting)
-        {
-            string value = setting.Value.AsString();
-            ImGui.InputText(Title(name), ref value, 500, ImGuiInputTextFlags.EnterReturnsTrue);
-            setting.Value = new JsonObject(new JValue(value));
-        }
+    private void StepFloat(ref float value, float? min, float? max, float? step)
+    {
+        if (step == null || step == 0) return;
+        float stepValue = step.Value;
+        float stepPoint = min ?? max ?? 0;
 
-        private int DrawComboBox(string name, string value, string[] values)
+        value = MathF.Round((value - stepPoint) / stepValue) * stepValue + stepPoint;
+    }
+
+    private void DrawIntegerSetting(string name, ConfigSetting setting)
+    {
+        int value = setting.Value.AsInt();
+        int previous = value;
+        ImGui.DragInt(Title(name), ref value);
+        if (previous != value) SetUnsavedChanges();
+        setting.Value = new JsonObject(new JValue(value));
+    }
+
+    private void DrawFloatSetting(string name, ConfigSetting setting)
+    {
+        float value = setting.Value.AsFloat();
+        float previous = value;
+        ImGui.DragFloat(Title(name), ref value);
+        if (previous != value) SetUnsavedChanges();
+        setting.Value = new JsonObject(new JValue(value));
+    }
+
+    private void DrawBooleanSetting(string name, ConfigSetting setting)
+    {
+        bool value = setting.Value.AsBool();
+        bool previous = value;
+        ImGui.Checkbox(Title(name), ref value);
+        if (previous != value) SetUnsavedChanges();
+        setting.Value = new JsonObject(new JValue(value));
+    }
+
+    private int DrawComboBox(string name, string value, string[] values)
+    {
+        int index;
+        for (index = 0; index < values.Length; index++) if (values[index] == value) break;
+        int previous = index;
+        ImGui.Combo(name, ref index, values, values.Length);
+        if (previous != index) SetUnsavedChanges();
+        return index;
+    }
+
+    public void DrawItemHint(string hint)
+    {
+        if (ImGui.BeginItemTooltip())
         {
-            int index;
-            for (index = 0; index < values.Length; index++) if (values[index] == value) break;
-            ImGui.Combo(name, ref index, values, values.Length);
-            return index;
+            ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35f);
+            ImGui.TextUnformatted(hint);
+            ImGui.PopTextWrapPos();
+
+            ImGui.EndTooltip();
         }
+    }
+
+    private void SetUnsavedChanges()
+    {
+        if (!mUnsavedDomains.Contains(mCurrentIndex)) mUnsavedDomains.Add(mCurrentIndex);
+        mUnsavedChanges = true;
     }
 }

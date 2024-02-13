@@ -1,278 +1,336 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
+using Vintagestory.Common;
 
-namespace ConfigLib
+namespace ConfigLib;
+
+internal class ConfigParser
 {
-    static internal class ConfigParser
+    private readonly Dictionary<string, ConfigSetting> mSettings;
+    private readonly StringBuilder mYaml;
+    private readonly ConfigSettingType mSettingType;
+    private readonly ICoreAPI mApi;
+
+    public ConfigParser(ICoreAPI api, Dictionary<string, ConfigSetting> settings, JsonObject definition, StringBuilder yaml)
     {
-        static public string ParseDefinition(JsonObject definition, out Dictionary<string, ConfigSetting> settings)
+        mSettings = settings;
+        mApi = api;
+        mYaml = yaml;
+        int version = definition["version"]?.AsInt(0) ?? 0;
+
+        mYaml.AppendLine($"version: {version}");
+
+        if (definition["settings"].KeyExists("boolean"))
         {
-            settings = new();
-            StringBuilder result = new();
-            foreach (JToken item in definition.Token)
+            mSettingType = ConfigSettingType.Boolean;
+            ParseCategory(definition["settings"]["boolean"]);
+        }
+
+        if (definition["settings"].KeyExists("integer"))
+        {
+            mSettingType = ConfigSettingType.Integer;
+            ParseCategory(definition["settings"]["boolean"]);
+        }
+
+        if (definition["settings"].KeyExists("float"))
+        {
+            mSettingType = ConfigSettingType.Float;
+            ParseCategory(definition["settings"]["float"]);
+        }
+
+        if (definition["settings"].KeyExists("number")) // @TODO remove
+        {
+            mSettingType = ConfigSettingType.Float;
+            ParseCategory(definition["settings"]["number"]);
+        }
+
+        if (definition["settings"].KeyExists("other"))
+        {
+            mSettingType = ConfigSettingType.Other;
+            ParseCategory(definition["settings"]["other"]);
+        }
+    }
+    private void ParseCategory(JsonObject category)
+    {
+        foreach (JToken item in category.Token)
+        {
+            ParseSetting(item);
+        }
+    }
+    private void ParseSetting(JToken item)
+    {
+        if (item is not JProperty property)
+        {
+            mApi.Logger.Error($"[Config lib] Error on parsing patches. Token '{item}' is not a property.");
+            return;
+        }
+
+        string yamlToken = SerializeToken(ParseToken(property));
+        mYaml.AppendLine(AddComments(yamlToken, property));
+    }
+
+    #region Comments parsing
+    private static string AddComments(string yamlToken, JProperty property)
+    {
+        (string first, string other) = SplitToken(yamlToken);
+        string comment = GetPreComment(property.Value).Replace("\n","");
+        if (comment != "") comment += "\n";
+        string inline = GetInlineComment(property.Value);
+        if (inline != "") inline = $" # {inline}";
+        return $"{comment}{first}{inline}{other}";
+    }
+    private static (string firstLine, string remainder) SplitToken(string token)
+    {
+        string[] split = token.Split("\r\n", 2, StringSplitOptions.RemoveEmptyEntries);
+
+        return (split[0], split.Length > 1 ? $"\r\n{split[1]}" : "");
+    }
+    private static string GetPreComment(JToken item)
+    {
+        if (
+            item is JObject itemObject &&
+            itemObject.ContainsKey("comment") &&
+            itemObject["comment"] is JValue commentValue &&
+            commentValue.Type == JTokenType.String &&
+            commentValue.Value is string comment
+            )
+        {
+            return $"# {comment}\n";
+        }
+
+        return "";
+    }
+    private static string GetInlineComment(JToken item)
+    {
+        if (item is JObject itemObject)
+        {
+            if (itemObject.ContainsKey("mapping"))
             {
-                result.Append(ParseSetting(item, settings));
-                result.Append('\n');
+                return ParseMappingComment(item);
             }
 
+            if (itemObject.ContainsKey("range"))
+            {
+                return ParseRangeComment(item);
+            }
+
+            if (itemObject.ContainsKey("values"))
+            {
+                return ParseValuesComment(item);
+            }
+        }
+
+        return "";
+    }
+    private static string ParseMappingComment(JToken item)
+    {
+        if (
+            item is JObject itemObject &&
+            itemObject.ContainsKey("mapping") &&
+            itemObject["mapping"] is JObject mapping
+        )
+        {
+            StringBuilder result = new();
+            result.Append("value from: ");
+            bool first = true;
+            foreach ((string name, _) in mapping)
+            {
+                if (!first) result.Append(", ");
+                if (first) first = false;
+                result.Append(name);
+            }
             return result.ToString();
         }
 
-        static private string ParseSetting(JToken item, Dictionary<string, ConfigSetting> settings)
+        return "";
+    }
+    private static string ParseRangeComment(JToken item)
+    {
+        if (
+            item is JObject itemObject &&
+            itemObject.ContainsKey("range") &&
+            itemObject["range"] is JObject range
+        )
         {
-            if (item is not JProperty property)
-            {
-                throw new InvalidConfigException("Invalid config formatting");
-            }
+            string? min = range.ContainsKey("min") ? (item["min"] as JValue)?.Value?.ToString() : null;
+            string? max = range.ContainsKey("max") ? (item["max"] as JValue)?.Value?.ToString() : null;
+            string? step = range.ContainsKey("max") ? (item["max"] as JValue)?.Value?.ToString() : null;
 
-            string token = SerializeToken(ParseToken(property, settings));
-            (string first, string other) = SplitToken(token);
-            string comment = GetPreComment(property.Value);
-            string inline = GetInlineComment(property.Value);
-            return $"{comment}{first}{inline}{other}";
-        }
-
-        static private string GetPreComment(JToken item)
-        {
-            if (
-                item is JObject itemObject &&
-                itemObject.ContainsKey("comment") &&
-                itemObject["comment"] is JValue commentValue &&
-                commentValue.Type == JTokenType.String &&
-                commentValue.Value is string comment
-                )
-            {
-                return $"# {comment}\n";
-            }
-
-            return "";
-        }
-
-        static private string GetInlineComment(JToken item)
-        {
-            if (
-                item is JObject itemObject &&
-                itemObject.ContainsKey("validation") &&
-                itemObject["validation"] is JObject validation
-                )
-            {
-                if (
-                validation.ContainsKey("mapping") &&
-                validation["mapping"] is JObject mapping
-                )
-                {
-                    return $" # {ParseMapping(mapping)}";
-                }
-
-                if (
-
-                    validation.ContainsKey("values") &&
-                    validation["values"] is JArray values
-                    )
-                {
-                    return $" # {ParseArray(values)}";
-                }
-
-                if (
-                    validation.ContainsKey("min") ||
-                    validation.ContainsKey("max")
-                    )
-                {
-                    return $" # {ParseMinMax(validation)}";
-                }
-            }
-
-            return "";
-        }
-
-        static private string ParseMinMax(JObject item)
-        {
-            string? min = item.ContainsKey("min") ? (item["min"] as JValue)?.Value?.ToString() : null;
-            string? max = item.ContainsKey("max") ? (item["max"] as JValue)?.Value?.ToString() : null;
-
-            return (min != null, max != null) switch
+            string minMax = (min != null, max != null) switch
             {
                 (true, true) => $"from {min} to {max}",
                 (true, false) => $"greater than {min}",
                 (false, true) => $"lesser than {max}",
                 _ => ""
             };
-        }
 
-        static private string ParseMapping(JObject item)
-        {
-            StringBuilder result = new();
-            result.Append("from [");
-            bool first = true;
-            foreach ((string name, _) in item)
+            if (step != null && minMax != "")
             {
-                if (!first) result.Append(", ");
-                if (first) first = false;
-                result.Append(name);
+                return $"{minMax} with step of {step}";
             }
-            result.Append(']');
-            return result.ToString();
+            else
+            {
+                return minMax;
+            }
         }
 
-        static private string ParseArray(JArray item)
+        return "";
+    }
+    private static string ParseValuesComment(JToken item)
+    {
+        if (
+            item is JObject itemObject &&
+            itemObject.ContainsKey("values") &&
+            itemObject["values"] is JArray values
+        )
         {
             StringBuilder result = new();
-            result.Append("from [");
+            result.Append("value from: ");
             bool first = true;
-            foreach (JToken element in item)
+            foreach (JToken element in values)
             {
                 if (!first) result.Append(", ");
                 if (first) first = false;
                 result.Append((element as JValue)?.Value);
             }
-            result.Append(']');
             return result.ToString();
         }
 
-        static private (string firstLine, string remainder) SplitToken(string token)
-        {
-            string[] split = token.Split("\r\n", 2, StringSplitOptions.RemoveEmptyEntries);
-
-            return (split[0], split.Length > 1 ? $"\r\n{split[1]}" : "");
-        }
-
-        static private string SerializeToken(JProperty token)
-        {
-            JObject tokenObject = new()
-            {
-                token
-            };
-
-            var simplifiedToken = ConvertJTokenToObject(tokenObject);
-
-            var serializer = new YamlDotNet.Serialization.Serializer();
-
-            using var writer = new StringWriter();
-            serializer.Serialize(writer, simplifiedToken);
-            var yaml = writer.ToString();
-            return yaml;
-        }
-
-        static private JProperty ParseToken(JProperty property, Dictionary<string, ConfigSetting> settings)
-        {
-            string code = property.Name;
-            string name = (string)((property.Value["name"] as JValue)?.Value ?? "");
-            string? comment = (string?)(property.Value["comment"] as JValue)?.Value;
-
-            if (property.Value is not JObject propertyValue) throw new InvalidConfigException("Invalid config formatting");
-
-            JToken value = GetValue(code, name, comment, propertyValue, settings);
-            JProperty result = new(name, value);
-            return result;
-        }
-
-        static private JToken GetValue(string code, string name, string? comment, JObject property, Dictionary<string, ConfigSetting> settings)
-        {
-            if (!property.ContainsKey("default") || property["default"] is not JToken defaultValue)
-            {
-                throw new InvalidConfigException($"Invalid or absent default value for '{code}' setting");
-            }
-
-            if (property.ContainsKey("validation") && property["validation"] is JObject validation)
-            {
-                return GetValidatedValue(code, name, comment, defaultValue, validation, settings);
-            }
-
-            ConfigSetting setting = new(name, new(defaultValue), defaultValue.Type);
-            settings.Add(code, setting);
-            return defaultValue;
-        }
-
-        static private JToken GetValidatedValue(string code, string name, string? comment, JToken defaultValue, JObject validation, Dictionary<string, ConfigSetting> settings)
-        {
-            if (validation.ContainsKey("mapping"))
-            {
-                if (validation["mapping"] is not JObject mapping)
-                {
-                    throw new InvalidConfigException($"Mapping for '{code}' setting has wrong format");
-                }
-
-                return ValidateMapping(code, name, comment, defaultValue, mapping, settings);
-            }
-
-            Validation? parsedValidation = null;
-
-            if (validation.ContainsKey("values"))
-            {
-                if (validation["values"] is not JArray values)
-                {
-                    throw new InvalidConfigException($"Values for '{code}' setting has wrong format");
-                }
-
-                List<JsonObject> parsedValues = new();
-                foreach (JToken value in values)
-                {
-                    parsedValues.Add(new(value));
-                }
-                parsedValidation = new(parsedValues);
-            }
-            else if (validation.ContainsKey("min") || validation.ContainsKey("max"))
-            {
-                JsonObject? min = validation.ContainsKey("min") ? new(validation["min"]) : null;
-                JsonObject? max = validation.ContainsKey("max") ? new(validation["max"]) : null;
-                parsedValidation = new(min, max);
-            }
-
-            ConfigSetting setting = new(name, new(defaultValue), defaultValue.Type, comment, parsedValidation);
-            settings.Add(code, setting);
-            return defaultValue;
-        }
-
-        static private JToken ValidateMapping(string code, string name, string? comment, JToken defaultValue, JObject mapping, Dictionary<string, ConfigSetting> settings)
-        {
-            if ((defaultValue as JValue)?.Value is not string value)
-            {
-                throw new InvalidConfigException($"Default value for '{code}' setting should have 'string' type, because this setting has mapping in validation");
-            }
-
-            if (!mapping.ContainsKey(value) || mapping[value] is not JToken validatedValue)
-            {
-                if (mapping.ContainsKey(value))
-                {
-                    throw new InvalidConfigException($"Default value '{value}' for '{code}' setting is not valid value");
-                }
-                else
-                {
-                    throw new InvalidConfigException($"Default value '{value}' for '{code}' setting is not found in this setting mapping");
-                }
-            }
-
-            Dictionary<string, JsonObject> settingMapping = new();
-
-            foreach ((string key, JToken? mappingValue) in mapping)
-            {
-                if (mappingValue == null)
-                {
-                    throw new InvalidConfigException($"Mapping value for entry '{key}' for setting '{code}' is not valid value");
-                }
-
-                settingMapping.Add(key, new(mappingValue));
-            }
-
-            ConfigSetting setting = new(name, new(validatedValue), validatedValue.Type, comment, new(settingMapping), value);
-            settings.Add(code, setting);
-            return new JValue(value);
-        }
-
-        static object ConvertJTokenToObject(JToken token)
-        {
-            if (token is JValue value && value.Value != null)
-                return value.Value;
-            if (token is JArray)
-                return token.AsEnumerable().Select(ConvertJTokenToObject).ToList();
-            if (token is JObject)
-                return token.AsEnumerable().Cast<JProperty>().ToDictionary(x => x.Name, x => ConvertJTokenToObject(x.Value));
-            throw new InvalidOperationException("Unexpected token: " + token);
-        }
+        return "";
     }
+    #endregion
+
+    #region Token serialization
+    private string SerializeToken(JProperty token)
+    {
+        JObject tokenObject = new()
+        {
+            token
+        };
+
+        object simplifiedToken = ConvertJTokenToObject(tokenObject);
+
+        YamlDotNet.Serialization.Serializer serializer = new();
+
+        using StringWriter writer = new();
+        serializer.Serialize(writer, simplifiedToken);
+        string yaml = writer.ToString();
+        return yaml;
+    }
+    static object ConvertJTokenToObject(JToken token)
+    {
+        if (token is JValue value && value.Value != null)
+            return value.Value;
+        if (token is JArray)
+            return token.AsEnumerable().Select(ConvertJTokenToObject).ToList();
+        if (token is JObject)
+            return token.AsEnumerable().Cast<JProperty>().ToDictionary(x => x.Name, x => ConvertJTokenToObject(x.Value));
+        throw new InvalidOperationException("Unexpected token: " + token);
+    }
+    private JProperty ParseToken(JProperty property)
+    {
+        string code = property.Name;
+        string name = (string)((property.Value["name"] as JValue)?.Value ?? "");
+        string? comment = (string?)(property.Value["comment"] as JValue)?.Value;
+
+        if (property.Value is not JObject propertyValue) throw new InvalidConfigException("Invalid config formatting");
+
+        JToken value = GetValue(code, name, comment, propertyValue);
+        JProperty result = new(name, value);
+        return result;
+    }
+
+    private JToken GetValue(string code, string name, string? comment, JObject property)
+    {
+        if (!property.ContainsKey("default") || property["default"] is not JToken defaultValue)
+        {
+            throw new InvalidConfigException($"Invalid or absent default value for '{code}' setting");
+        }
+
+        if (property.ContainsKey("mapping") && property["mapping"] is JObject mapping)
+        {
+            return GetMappingValue(code, name, comment, defaultValue, mapping);
+        }
+
+        if (property.ContainsKey("range") && property["range"] is JObject range)
+        {
+            return GetRangeValue(code, name, comment, defaultValue, range);
+        }
+
+        if (property.ContainsKey("values") && property["values"] is JArray values)
+        {
+            return GetValuesValue(code, name, comment, defaultValue, values);
+        }
+
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment);
+        mSettings.Add(code, setting);
+        return defaultValue;
+    }
+    private JToken GetMappingValue(string code, string name, string? comment, JToken defaultValue, JObject mapping)
+    {
+        if ((defaultValue as JValue)?.Value is not string value)
+        {
+            throw new InvalidConfigException($"Default value for '{code}' setting should have 'string' type, because this setting has mapping in validation");
+        }
+
+        if (!mapping.ContainsKey(value) || mapping[value] is not JToken validatedValue)
+        {
+            if (mapping.ContainsKey(value))
+            {
+                throw new InvalidConfigException($"Default value '{value}' for '{code}' setting is not valid value");
+            }
+            else
+            {
+                throw new InvalidConfigException($"Default value '{value}' for '{code}' setting is not found in this setting mapping");
+            }
+        }
+
+        Dictionary<string, JsonObject> settingMapping = new();
+
+        foreach ((string key, JToken? mappingValue) in mapping)
+        {
+            if (mappingValue == null)
+            {
+                throw new InvalidConfigException($"Mapping value for entry '{key}' for setting '{code}' is not valid value");
+            }
+
+            settingMapping.Add(key, new(mappingValue));
+        }
+
+        ConfigSetting setting = new(name, new(validatedValue), mSettingType, comment, new(settingMapping), value);
+        mSettings.Add(code, setting);
+        return new JValue(value);
+    }
+    private JToken GetRangeValue(string code, string name, string? comment, JToken defaultValue, JObject range)
+    {
+
+        JsonObject? min = range.ContainsKey("min") ? new(range["min"]) : null;
+        JsonObject? max = range.ContainsKey("max") ? new(range["max"]) : null;
+        JsonObject? step = range.ContainsKey("step") ? new(range["step"]) : null;
+        Validation parsedValidation = new(min, max, step);
+
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation);
+        mSettings.Add(code, setting);
+        return defaultValue;
+    }
+    private JToken GetValuesValue(string code, string name, string? comment, JToken defaultValue, JArray values)
+    {
+        List<JsonObject> parsedValues = new();
+        foreach (JToken value in values)
+        {
+            parsedValues.Add(new(value));
+        }
+
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, new(parsedValues));
+        mSettings.Add(code, setting);
+        return defaultValue;
+    }
+    #endregion
 }

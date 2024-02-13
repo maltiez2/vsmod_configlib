@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+	<PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
+	  <PrivateAssets>all</PrivateAssets>
+	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	</PackageReference>
     <Reference Include="ImGui.NET">
       <HintPath>..\..\VSImGui\Releases\vsimgui\ImGui.NET.dll</HintPath>
       <Private>False</Private>
@@ -15,7 +19,7 @@
     </Reference>
     <Reference Include="SimpleExpressionEngine">
       <HintPath>..\libs\SimpleExpressionEngine.dll</HintPath>
-      <Private>True</Private>
+      <Private>False</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <Reference Include="VintagestoryAPI">
@@ -61,17 +65,18 @@
     </Reference>
     <Reference Include="YamlDotNet">
       <HintPath>..\libs\YamlDotNet.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
 
-<ItemGroup>
-  <Content Include="assets\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </Content>
-  <None Remove="assets\configlib\config\settings-config.json" />
-  <Content Include="modinfo.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-  </Content>
-</ItemGroup>
+    <ItemGroup>
+      <Content Include="assets\**">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <None Remove="assets\configlib\config\format-prototype.json" />
+      <Content Include="modinfo.json">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
 
 </Project>
