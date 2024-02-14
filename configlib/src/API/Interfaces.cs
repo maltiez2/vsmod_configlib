@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ConfigLib.Formatting;
+using System;
 using System.Collections.Generic;
 using Vintagestory.API.Datastructures;
 
@@ -32,7 +33,7 @@ public enum ConfigSettingType
     Other
 }
 
-public interface ISetting
+public interface ISetting : IConfigBlock
 {
     JsonObject Value { get; set; }
     JsonObject DefaultValue { get; }

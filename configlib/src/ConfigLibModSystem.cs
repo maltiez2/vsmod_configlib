@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using ConfigLib.Patches;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,6 +32,11 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     public override void Start(ICoreAPI api)
     {
         mApi = api;
+
+        if (api.Side == EnumAppSide.Client)
+        {
+            PauseMenuPatch.Patch();
+        }
     }
     public override void AssetsLoaded(ICoreAPI api)
     {
@@ -54,6 +60,11 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     }
     public override void Dispose()
     {
+        if (mApi?.Side == EnumAppSide.Client)
+        {
+            PauseMenuPatch.Patch();
+        }
+
         sConfigs.Clear();
         sDomains.Clear();
         sCustomConfigs.Clear();

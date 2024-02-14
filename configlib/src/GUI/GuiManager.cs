@@ -11,6 +11,7 @@ namespace ConfigLib
 
         private bool mDisposed;
         private bool mShowConfig = false;
+        private static GuiManager? mInstance;
 
         public GuiManager(ICoreClientAPI api)
         {
@@ -20,6 +21,7 @@ namespace ConfigLib
             dialog = new VanillaGuiDialog(api);
 
             mConfigWindow = new(api);
+            mInstance = this;
         }
 
         public void Draw()
@@ -29,6 +31,24 @@ namespace ConfigLib
                 dialog.TryClose();
                 mShowConfig = false;
             }
+        }
+
+        public bool ShowConfigWindow()
+        {
+            if (dialog?.IsOpened() == false)
+            {
+                dialog.TryOpen();
+                mShowConfig = true;
+            }
+
+            return true;
+        }
+
+        public static bool ShowConfigWindowStatic()
+        {
+            mInstance?.ShowConfigWindow();
+
+            return true;
         }
 
         private bool ShowConfigWindow(KeyCombination keyCombination)

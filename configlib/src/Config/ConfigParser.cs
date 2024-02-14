@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,25 +6,26 @@ using System.Linq;
 using System.Text;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using Vintagestory.Common;
 
 namespace ConfigLib;
 
 internal class ConfigParser
 {
     private readonly Dictionary<string, ConfigSetting> mSettings;
-    private readonly StringBuilder mYaml;
+    private readonly SortedDictionary<float, string> mYaml;
     private readonly ConfigSettingType mSettingType;
     private readonly ICoreAPI mApi;
+    private const float cDelta = 1E-10f;
+    private float mIncrement = cDelta;
 
-    public ConfigParser(ICoreAPI api, Dictionary<string, ConfigSetting> settings, JsonObject definition, StringBuilder yaml)
+    public ConfigParser(ICoreAPI api, Dictionary<string, ConfigSetting> settings, JsonObject definition, SortedDictionary<float, string> yaml)
     {
         mSettings = settings;
         mApi = api;
         mYaml = yaml;
         int version = definition["version"]?.AsInt(0) ?? 0;
 
-        mYaml.AppendLine($"version: {version}");
+        mYaml.Add(-1, $"version: {version}");
 
         if (definition["settings"].KeyExists("boolean"))
         {
@@ -36,7 +36,7 @@ internal class ConfigParser
         if (definition["settings"].KeyExists("integer"))
         {
             mSettingType = ConfigSettingType.Integer;
-            ParseCategory(definition["settings"]["boolean"]);
+            ParseCategory(definition["settings"]["integer"]);
         }
 
         if (definition["settings"].KeyExists("float"))
@@ -72,8 +72,16 @@ internal class ConfigParser
             return;
         }
 
-        string yamlToken = SerializeToken(ParseToken(property));
-        mYaml.AppendLine(AddComments(yamlToken, property));
+        (JProperty token, ConfigSetting setting) = ParseToken(property);
+
+        string yamlToken = SerializeToken(token);
+        float weight = setting.SortingWeight < 0 ? 0 : setting.SortingWeight;
+        if (mYaml.ContainsKey(weight))
+        {
+            weight += mIncrement;
+            mIncrement += cDelta;
+        }
+        mYaml.Add(weight, AddComments(yamlToken, property));
     }
 
     #region Comments parsing
@@ -234,7 +242,7 @@ internal class ConfigParser
             return token.AsEnumerable().Cast<JProperty>().ToDictionary(x => x.Name, x => ConvertJTokenToObject(x.Value));
         throw new InvalidOperationException("Unexpected token: " + token);
     }
-    private JProperty ParseToken(JProperty property)
+    private (JProperty, ConfigSetting) ParseToken(JProperty property)
     {
         string code = property.Name;
         string name = (string)((property.Value["name"] as JValue)?.Value ?? "");
@@ -242,12 +250,12 @@ internal class ConfigParser
 
         if (property.Value is not JObject propertyValue) throw new InvalidConfigException("Invalid config formatting");
 
-        JToken value = GetValue(code, name, comment, propertyValue);
+        (JToken value, ConfigSetting setting) = GetValue(code, name, comment, propertyValue);
         JProperty result = new(name, value);
-        return result;
+        return (result, setting);
     }
 
-    private JToken GetValue(string code, string name, string? comment, JObject property)
+    private (JToken, ConfigSetting) GetValue(string code, string name, string? comment, JObject property)
     {
         if (!property.ContainsKey("default") || property["default"] is not JToken defaultValue)
         {
@@ -256,24 +264,24 @@ internal class ConfigParser
 
         if (property.ContainsKey("mapping") && property["mapping"] is JObject mapping)
         {
-            return GetMappingValue(code, name, comment, defaultValue, mapping);
+            return GetMappingValue(code, name, comment, defaultValue, mapping, property);
         }
 
         if (property.ContainsKey("range") && property["range"] is JObject range)
         {
-            return GetRangeValue(code, name, comment, defaultValue, range);
+            return GetRangeValue(code, name, comment, defaultValue, range, property);
         }
 
         if (property.ContainsKey("values") && property["values"] is JArray values)
         {
-            return GetValuesValue(code, name, comment, defaultValue, values);
+            return GetValuesValue(code, name, comment, defaultValue, values, property);
         }
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment);
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, null, null, GetWeight(property));
         mSettings.Add(code, setting);
-        return defaultValue;
+        return (defaultValue, setting);
     }
-    private JToken GetMappingValue(string code, string name, string? comment, JToken defaultValue, JObject mapping)
+    private (JToken, ConfigSetting) GetMappingValue(string code, string name, string? comment, JToken defaultValue, JObject mapping, JObject property)
     {
         if ((defaultValue as JValue)?.Value is not string value)
         {
@@ -304,11 +312,11 @@ internal class ConfigParser
             settingMapping.Add(key, new(mappingValue));
         }
 
-        ConfigSetting setting = new(name, new(validatedValue), mSettingType, comment, new(settingMapping), value);
+        ConfigSetting setting = new(name, new(validatedValue), mSettingType, comment, new(settingMapping), value, GetWeight(property));
         mSettings.Add(code, setting);
-        return new JValue(value);
+        return (new JValue(value), setting);
     }
-    private JToken GetRangeValue(string code, string name, string? comment, JToken defaultValue, JObject range)
+    private (JToken, ConfigSetting) GetRangeValue(string code, string name, string? comment, JToken defaultValue, JObject range, JObject property)
     {
 
         JsonObject? min = range.ContainsKey("min") ? new(range["min"]) : null;
@@ -316,11 +324,11 @@ internal class ConfigParser
         JsonObject? step = range.ContainsKey("step") ? new(range["step"]) : null;
         Validation parsedValidation = new(min, max, step);
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation);
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation, null, GetWeight(property));
         mSettings.Add(code, setting);
-        return defaultValue;
+        return (defaultValue, setting);
     }
-    private JToken GetValuesValue(string code, string name, string? comment, JToken defaultValue, JArray values)
+    private (JToken, ConfigSetting) GetValuesValue(string code, string name, string? comment, JToken defaultValue, JArray values, JObject property)
     {
         List<JsonObject> parsedValues = new();
         foreach (JToken value in values)
@@ -328,9 +336,19 @@ internal class ConfigParser
             parsedValues.Add(new(value));
         }
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, new(parsedValues));
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, new(parsedValues), null, GetWeight(property));
         mSettings.Add(code, setting);
-        return defaultValue;
+        return (defaultValue, setting);
+    }
+    private float GetWeight(JObject property)
+    {
+        if (property.ContainsKey("weight") && property["weight"] is JValue weight && (weight.Type == JTokenType.Float || weight.Type == JTokenType.Integer))
+        {
+            JsonObject value = new(weight);
+            return value.AsFloat(0);
+        }
+
+        return 0;
     }
     #endregion
 }

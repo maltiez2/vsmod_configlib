@@ -1,7 +1,10 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using ConfigLib.Formatting;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using YamlDotNet.Serialization;
@@ -16,12 +19,16 @@ public class Config : IConfig
     public bool LoadedFromFile { get; private set; }
     public JsonObject Definition => mDefinition;
     public int Version { get; private set; }
+    public SortedDictionary<float, IConfigBlock> ConfigBlocks => mConfigBlocks;
 
     private readonly ICoreAPI mApi;
     private readonly string mDomain;
     private readonly Dictionary<string, ConfigSetting> mSettings = new();
+    private readonly SortedDictionary<float, IConfigBlock> mConfigBlocks = new();
     private readonly JsonObject mDefinition;
     private readonly ConfigPatches mPatches;
+    private const float cDelta = 1E-9f;
+    private float mIncrement = cDelta;
 
     private string mYamlConfig;
 
@@ -36,15 +43,17 @@ public class Config : IConfig
 
         try
         {
-            System.Text.StringBuilder yaml = new();
+            SortedDictionary<float, string> yaml = new();
             _ = new ConfigParser(mApi, mSettings, mDefinition, yaml);
-            mYamlConfig = yaml.ToString();
+            FillConfigBlocks();
+            string constructedYaml = ConstructYaml(yaml);
+            mYamlConfig = (string)constructedYaml.Clone();
             ReadFromFile();
             bool validVersion = UpdateValues(DeserializeYaml(mYamlConfig));
             if (!validVersion)
             {
                 mApi.Logger.Notification($"[Config lib] ({domain}) Not valid config file version, restoring to default values.");
-                mYamlConfig = yaml.ToString();
+                mYamlConfig = constructedYaml;
                 UpdateValues(DeserializeYaml(mYamlConfig));
                 WriteToFile();
             }
@@ -96,7 +105,7 @@ public class Config : IConfig
         {
             mApi.Logger.Error($"Exception when trying to deserialize yaml and write it to file for '{mDomain}' config.\nException: {exception}\n");
         }
-        
+
     }
     public bool ReadFromFile()
     {
@@ -127,19 +136,68 @@ public class Config : IConfig
     public void UpdateFromFile()
     {
         ReadFromFile();
-        UpdateValues(DeserializeYaml(mYamlConfig));
+        JObject deserialized = DeserializeYaml(mYamlConfig);
+        UpdateValues(deserialized);
     }
     public void RestoreToDefault()
     {
         if (LoadedFromFile)
         {
             mSettings.Clear();
-            System.Text.StringBuilder yaml = new();
-            _ = new ConfigParser(mApi, mSettings, mDefinition, yaml);
-            mYamlConfig = yaml.ToString();
+            WriteYaml(mSettings, mDefinition);
         }
     }
 
+    private void WriteYaml(Dictionary<string, ConfigSetting> settings, JsonObject definition)
+    {
+        SortedDictionary<float, string> yaml = new();
+        _ = new ConfigParser(mApi, settings, definition, yaml);
+        FillConfigBlocks();
+        mYamlConfig = ConstructYaml(yaml);
+    }
+    private string ConstructYaml(SortedDictionary<float, string> yaml)
+    {
+        foreach ((float weight, IConfigBlock block) in mConfigBlocks.Where(entry => entry.Value is IFormattingBlock))
+        {
+            yaml.Add(weight, (block as IFormattingBlock)?.Yaml ?? "");
+        }
+
+        return yaml.Select(entry => entry.Value).Aggregate((first, second) => $"{first}\n{second}");
+    }
+    private void FillConfigBlocks()
+    {
+        mConfigBlocks.Clear();
+
+        foreach ((_, ConfigSetting setting) in mSettings)
+        {
+            float weight = setting.SortingWeight;
+            if (mConfigBlocks.ContainsKey(weight))
+            {
+                weight += mIncrement;
+                mIncrement += cDelta;
+            }
+            mConfigBlocks.Add(weight, setting);
+        }
+
+        if (mDefinition.KeyExists("formatting") && mDefinition["formatting"].IsArray())
+        {
+            foreach (JsonObject block in mDefinition["formatting"].AsArray())
+            {
+                IFormattingBlock formattingBlock = ParseBlock(block);
+                mConfigBlocks.Add(formattingBlock.SortingWeight, formattingBlock);
+            }
+        }
+    }
+    private IFormattingBlock ParseBlock(JsonObject block)
+    {
+        switch (block["type"]?.AsString())
+        {
+            case "separator":
+                return new Separator(block);
+        }
+
+        return new Blank();
+    }
     private JsonObject ReplaceValues()
     {
         JsonObject result = mDefinition.Clone();
@@ -147,7 +205,7 @@ public class Config : IConfig
         foreach ((_, JToken? category) in settings)
         {
             if (category is not JObject categoryValue) continue;
-            
+
             foreach ((string key, JToken? value) in categoryValue)
             {
                 if (mSettings.ContainsKey(key) && value is JObject valueObject)
@@ -180,7 +238,8 @@ public class Config : IConfig
 
             if (setting.Validation?.Mapping == null)
             {
-                setting.Value = new(ConvertValue(values[setting.YamlCode], setting.SettingType));
+                JToken converted = ConvertValue(values[setting.YamlCode], setting.SettingType);
+                setting.Value = new(converted);
                 continue;
             }
 
@@ -209,16 +268,19 @@ public class Config : IConfig
     {
         string? strValue = (string?)(value as JValue)?.Value;
         if (strValue == null) return value ?? new JValue(strValue);
+
+        CultureInfo culture = new("en-US");
+
         switch (type)
         {
             case ConfigSettingType.Boolean:
                 bool boolValue = bool.Parse(strValue);
                 return new JValue(boolValue);
             case ConfigSettingType.Float:
-                float floatValue = float.Parse(strValue);
+                float floatValue = float.Parse(strValue, NumberStyles.Float, culture);
                 return new JValue(floatValue);
             case ConfigSettingType.Integer:
-                int intValue = int.Parse(strValue);
+                int intValue = int.Parse(strValue, NumberStyles.Integer, culture);
                 return new JValue(intValue);
             default:
                 return value ?? new JValue(strValue);
@@ -228,9 +290,7 @@ public class Config : IConfig
     {
         JsonObject definition = ReplaceValues();
 
-        System.Text.StringBuilder yaml = new();
-        _ = new ConfigParser(mApi, new(), definition, yaml);
-        mYamlConfig = yaml.ToString();
+        WriteYaml(new(), definition);
     }
     static private JObject DeserializeYaml(string config)
     {

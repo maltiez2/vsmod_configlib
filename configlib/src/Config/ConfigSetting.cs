@@ -14,8 +14,9 @@ public class ConfigSetting : ISetting
     public string? MappingKey { get; set; }
     public string? Comment { get; set; }
     public Validation? Validation { get; private set; }
+    public float SortingWeight { get; private set; }
 
-    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType, string? comment = null, Validation? validation = null, string? mappingKey = null)
+    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType, string? comment = null, Validation? validation = null, string? mappingKey = null, float sortingWeight = 0)
     {
         Value = defaultValue;
         DefaultValue = defaultValue;
@@ -24,6 +25,7 @@ public class ConfigSetting : ISetting
         MappingKey = mappingKey;
         Comment = comment;
         YamlCode = yamlCode;
+        SortingWeight = sortingWeight;
     }
     public ConfigSetting(ConfigSettingPacket settings)
     {
@@ -33,6 +35,7 @@ public class ConfigSetting : ISetting
         YamlCode = settings.YamlCode;
         MappingKey = settings.MappingKey;
         Comment = settings.Comment;
+        SortingWeight= settings.SortingWeight;
         if (settings.Validation != null) Validation = settings.Validation;
     }
 
@@ -55,6 +58,7 @@ public class ConfigSettingPacket
     public string? MappingKey { get; set; }
     public string? Comment { get; set; }
     public ValidationPacket? Validation { get; private set; }
+    public float SortingWeight { get; private set; } = 0;
 
     public ConfigSettingPacket() { }
     public ConfigSettingPacket(ConfigSetting settings)

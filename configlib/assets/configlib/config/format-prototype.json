@@ -28,6 +28,7 @@
       "SETTING_0": {
         "name": "yaml-setting-0",
         "comment": "Some optional desctiption",
+        "sortingWeight": 1.0,
         "default": false
       },
       "SETTING_1": {
@@ -84,5 +85,27 @@
         }
       }
     }
-  }
+  },
+  "formatting": [
+    {
+      "type": "separator",
+      "weight": 1.1
+    },
+    {
+      "type": "separator",
+      "text": "Multiline\nText",
+      "weight": 2.1
+    },
+    {
+      "type": "separator",
+      "title": "Separator 0",
+      "weight": 3.1
+    },
+    {
+      "type": "separator",
+      "text": "Multiline\nText",
+      "title": "Separator 0",
+      "weight": 4.1
+    }
+  ]
 }

@@ -7,6 +7,7 @@ using Newtonsoft.Json.Linq;
 using VSImGui;
 using System;
 using Vintagestory.API.MathTools;
+using ConfigLib.Formatting;
 
 namespace ConfigLib;
 
@@ -268,34 +269,40 @@ internal class ConfigWindow
 
     private void DrawModConfig(Config config)
     {
-        ImGui.PushItemWidth(250);
-        foreach ((_, ConfigSetting setting) in config.Settings)
+        foreach ((float weight, var block) in config.ConfigBlocks)
         {
-            if (setting.Validation != null)
-            {
-                DrawValidatedSetting(setting.YamlCode, setting);
-            }
-            else
-            {
-                switch (setting.SettingType)
-                {
-                    case ConfigSettingType.Boolean:
-                        DrawBooleanSetting(setting.YamlCode, setting);
-                        break;
-                    case ConfigSettingType.Integer:
-                        DrawIntegerSetting(setting.YamlCode, setting);
-                        break;
-                    case ConfigSettingType.Float:
-                        DrawFloatSetting(setting.YamlCode, setting);
-                        break;
-                    default:
-                        ImGui.TextDisabled($"{setting.YamlCode}: unavailable");
-                        break;
-                }
-            }
-
-            DrawHint(setting);
+            if (block is ConfigSetting setting) DrawSetting(setting);
+            if (block is IFormattingBlock formatting) formatting.Draw(weight.ToString());
         }
+    }
+
+    private void DrawSetting(ConfigSetting setting)
+    {
+        ImGui.PushItemWidth(250);
+        if (setting.Validation != null)
+        {
+            DrawValidatedSetting(setting.YamlCode, setting);
+        }
+        else
+        {
+            switch (setting.SettingType)
+            {
+                case ConfigSettingType.Boolean:
+                    DrawBooleanSetting(setting.YamlCode, setting);
+                    break;
+                case ConfigSettingType.Integer:
+                    DrawIntegerSetting(setting.YamlCode, setting);
+                    break;
+                case ConfigSettingType.Float:
+                    DrawFloatSetting(setting.YamlCode, setting);
+                    break;
+                default:
+                    ImGui.TextDisabled($"{setting.YamlCode}: unavailable");
+                    break;
+            }
+        }
+
+        DrawHint(setting);
         ImGui.PopItemWidth();
     }
 
