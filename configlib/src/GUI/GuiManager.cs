@@ -35,9 +35,14 @@ namespace ConfigLib
 
         public bool ShowConfigWindow()
         {
-            if (dialog?.IsOpened() == false)
+            if (dialog?.IsOpened() == true)
             {
-                dialog.TryOpen();
+                dialog.TryClose();
+                mShowConfig = false;
+            }
+            else
+            {
+                dialog?.TryOpen();
                 mShowConfig = true;
             }
 

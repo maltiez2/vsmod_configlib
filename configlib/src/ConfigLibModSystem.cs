@@ -2,7 +2,9 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
@@ -14,37 +16,49 @@ namespace ConfigLib;
 
 public class ConfigLibModSystem : ModSystem, IConfigProvider
 {
-    public IEnumerable<string> Domains => sDomains;
-    public IConfig? GetConfig(string domain) => GetConfigStatic(domain);
-    public ISetting? GetSetting(string domain, string code) => GetConfigStatic(domain)?.GetSetting(code);
-    public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => sCustomConfigs.TryAdd(domain, drawDelegate);
+    public IEnumerable<string> Domains => mDomains;
+    public IConfig? GetConfig(string domain) => GetConfigImpl(domain);
+    public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
+    public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => mCustomConfigs.TryAdd(domain, drawDelegate);
 
-    static internal HashSet<string> GetDomains() => sDomains;
-    static internal Config? GetConfigStatic(string domain) => sConfigs?.ContainsKey(domain) == true ? sConfigs[domain] : null;
-    static internal Dictionary<string, Action<string, ControlButtons>>? GetCustomConfigs() => sCustomConfigs;
+    /// <summary>
+    /// On Server: right after configs are applied<br/>
+    /// On Client: right after configs are received from server and applied (between AssetsLoaded and AssetsFinalize stages)
+    /// </summary>
+    public event Action? ConfigsLoaded;
 
-    static private readonly Dictionary<string, Config> sConfigs = new();
-    static private readonly HashSet<string> sDomains = new();
-    static private readonly Dictionary<string, Action<string, ControlButtons>> sCustomConfigs = new();
+    internal HashSet<string> GetDomains() => mDomains;
+    internal Config? GetConfigImpl(string domain) => mConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
+    internal Dictionary<string, Action<string, ControlButtons>>? GetCustomConfigs() => mCustomConfigs;
+
+    private readonly Dictionary<string, Config> mConfigs = new();
+    private readonly HashSet<string> mDomains = new();
+    private readonly Dictionary<string, Action<string, ControlButtons>> mCustomConfigs = new();
     private GuiManager? mGuiManager;
     private ICoreAPI? mApi;
+    private const string cRegistryCode = "configlib:configs";
 
     public override void Start(ICoreAPI api)
     {
         mApi = api;
+        api.RegisterRecipeRegistry<ConfigRegistry>(cRegistryCode);
 
         if (api.Side == EnumAppSide.Client)
         {
             PauseMenuPatch.Patch();
+            ConfigRegistry.ConfigsLoaded += ReloadConfigs;
         }
     }
     public override void AssetsLoaded(ICoreAPI api)
     {
         LoadConfigs();
-        foreach ((_, Config config) in sConfigs)
+        mApi?.Logger.Notification($"[Config lib] Configs loaded: {mConfigs.Count}");
+        foreach ((_, Config config) in mConfigs)
         {
             config.Apply();
         }
+
+        ConfigsLoaded?.Invoke();
     }
     public override void AssetsFinalize(ICoreAPI api)
     {
@@ -54,10 +68,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
             clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
         }
     }
-    public override double ExecuteOrder()
-    {
-        return 0.01;
-    }
+    public override double ExecuteOrder() => 0.01;
     public override void Dispose()
     {
         if (mApi?.Side == EnumAppSide.Client)
@@ -65,9 +76,9 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
             PauseMenuPatch.Patch();
         }
 
-        sConfigs.Clear();
-        sDomains.Clear();
-        sCustomConfigs.Clear();
+        mConfigs.Clear();
+        mDomains.Clear();
+        mCustomConfigs.Clear();
         if (mApi?.Side == EnumAppSide.Client && mGuiManager != null)
         {
             mApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows -= mGuiManager.Draw;
@@ -77,43 +88,38 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         base.Dispose();
     }
 
+    private void ReloadConfigs(Dictionary<string, Config> configs)
+    {
+        mApi?.Logger.Notification($"[Config lib] Configs received from server: {configs.Count}");
+
+        foreach ((string domain, Config config) in configs)
+        {
+            mConfigs[domain] = config;
+            config.Apply();
+        }
+
+        ConfigsLoaded?.Invoke();
+    }
     private void LoadConfigs()
     {
-        switch (mApi?.Side)
+        if (mApi == null) return;
+        
+        ConfigRegistry? registry = GetRegistry(mApi);
+
+        foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "configlib-patches.json"))
         {
-            case EnumAppSide.Universal:
-            case EnumAppSide.Server:
-                foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "configlib-patches.json"))
-                {
-                    try
-                    {
-                        LoadConfig(asset);
-                    }
-                    catch (Exception exception)
-                    {
-                        mApi.Logger.Error($"[Config lib] Error on loading config for {mApi.ModLoader.GetMod(asset.Location.Domain)}.");
-                        mApi.Logger.VerboseDebug($"[Config lib] Error on loading config for {mApi.ModLoader.GetMod(asset.Location.Domain)}.\n{exception}\n");
-                    }
-                    
-                }
-                break;
-            case EnumAppSide.Client:
-                foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Location.BeginsWith("configlib", "config/configlib")))
-                {
-                    try
-                    {
-                        RetrieveConfig(asset);
-                    }
-                    catch (Exception exception)
-                    {
-                        mApi.Logger.Error($"[Config lib] Error on loading config for {mApi.ModLoader.GetMod(asset.Location.GetName())}.");
-                        mApi.Logger.VerboseDebug($"[Config lib] Error on loading config for {mApi.ModLoader.GetMod(asset.Location.GetName())}.\n{exception}\n");
-                    }
-                }
-                break;
+            try
+            {
+                LoadConfig(asset, registry);
+            }
+            catch (Exception exception)
+            {
+                mApi.Logger.Error($"[Config lib] Error on loading config for {mApi.ModLoader.GetMod(asset.Location.Domain)}.");
+                mApi.Logger.VerboseDebug($"[Config lib] Error on loading config for {mApi.ModLoader.GetMod(asset.Location.Domain)}.\n{exception}\n");
+            }
         }
     }
-    private void LoadConfig(IAsset asset)
+    private void LoadConfig(IAsset asset, ConfigRegistry? registry)
     {
         if (mApi == null) return;
 
@@ -123,27 +129,66 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         JObject token = JObject.Parse(json);
         JsonObject parsedConfig = new(token);
         Config config = new(mApi, domain, parsedConfig);
-        sConfigs.Add(domain, config);
-        sDomains.Add(domain);
+        mConfigs.Add(domain, config);
+        mDomains.Add(domain);
 
-        StoreConfig(domain, config);
+        registry?.Register(domain, config);
     }
-    private void RetrieveConfig(IAsset asset)
+    private static ConfigRegistry? GetRegistry(ICoreAPI api)
     {
-        if (mApi == null) return;
+        MethodInfo? getter = typeof(GameMain).GetMethod("GetRecipeRegistry", BindingFlags.Instance | BindingFlags.NonPublic);
+        return (ConfigRegistry?)getter?.Invoke(api.World, new object[] { cRegistryCode });
+    }
+}
 
-        byte[] data = asset.Data;
-        SettingsPacket packet = SerializerUtil.Deserialize<SettingsPacket>(data);
-        Config config = new(mApi, packet.Domain, packet.GetSettings(), new(JObject.Parse(Asset.BytesToString(packet.Definition))));
-        sConfigs.TryAdd(packet.Domain, config);
-        if (!sDomains.Contains(packet.Domain)) sDomains.Add(packet.Domain);
-        mApi.Logger.Debug($"[Config lib] Loaded config from server assets for '{packet.Domain}'");
-    }
-    private void StoreConfig(string domain, Config config)
+internal class ConfigRegistry : RecipeRegistryBase
+{
+    public static event Action<Dictionary<string, Config>>? ConfigsLoaded;
+
+    private readonly Dictionary<string, Config> mConfigs = new();
+
+    public override void FromBytes(IWorldAccessor resolver, int quantity, byte[] data)
     {
-        byte[] newData = SerializerUtil.Serialize(new SettingsPacket(domain, config.Settings, config.Definition));
-        AssetLocation location = new("configlib", $"config/configlib/{domain}");
-        Asset configAsset = new(newData, location, new SettingsOrigin(newData, location));
-        mApi?.Assets.Add(location, configAsset);
+        using MemoryStream serializedRecipesList = new(data);
+        using BinaryReader reader = new(serializedRecipesList);
+
+        for (int count = 0; count < quantity; count++)
+        {
+            string domain = reader.ReadString();
+            int length = reader.ReadInt32();
+            byte[] configData = reader.ReadBytes(length);
+
+            SettingsPacket packet = SerializerUtil.Deserialize<SettingsPacket>(configData);
+            Config config = new(resolver.Api, packet.Domain, packet.GetSettings(), new(JObject.Parse(Asset.BytesToString(packet.Definition))));
+
+            mConfigs[domain] = config;
+        }
+
+        resolver.Logger.Debug($"[Config lib] [Registry] Received config from server: {quantity}");
+
+        ConfigsLoaded?.Invoke(mConfigs);
+    }
+    public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity)
+    {
+        quantity = mConfigs.Count;
+
+        using MemoryStream serializedConfigs = new();
+        using BinaryWriter writer = new(serializedConfigs);
+
+        foreach ((string domain, Config config) in mConfigs)
+        {
+            writer.Write(domain);
+            byte[] configData = SerializerUtil.Serialize(new SettingsPacket(domain, config.Settings, config.Definition));
+            writer.Write(configData.Length);
+            writer.Write(configData);
+        }
+
+        resolver.Logger.Debug($"[Config lib] [Registry] Configs prepared to send to client: {quantity}");
+
+        data = serializedConfigs.ToArray();
+    }
+    public void Register(string domain, Config config)
+    {
+        mConfigs[domain] = config;
     }
 }

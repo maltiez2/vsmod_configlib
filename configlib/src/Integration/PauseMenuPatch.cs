@@ -60,8 +60,8 @@ internal static class PauseMenuPatch
         };
 
         __result = composer
-            .AddButton(text, onClick, left.WithFixedWidth(124))
-            .AddButton("Mods settings", GuiManager.ShowConfigWindowStatic, right.WithFixedWidth(203));
+            .AddButton(text, onClick, left.WithFixedWidth(144))
+            .AddButton("Mods settings", GuiManager.ShowConfigWindowStatic, right.WithFixedWidth(183));
 
         return false;
     }

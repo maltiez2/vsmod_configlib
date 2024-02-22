@@ -28,7 +28,7 @@ namespace ConfigLib
             return true;
         }
 
-        public List<IAsset> GetAssets(AssetCategory Category, bool shouldLoad = true)
+        public List<IAsset> GetAssets(AssetCategory category, bool shouldLoad = true)
         {
             List<IAsset> list = new()
             {

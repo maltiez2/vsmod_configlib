@@ -41,8 +41,8 @@ public class ConfigPatches
         {
             try
             {
-                (int successful, int failed) = patch.Apply();
-                if (successful >= 0) mApi.Logger.Debug($"[Config lib] Values patched: {successful}, failed: {failed} in asset: '{patch.File}'.");
+                (int successful, int failed) = patch.Apply(out bool serverSide);
+                if (!serverSide && successful >= 0) mApi.Logger.Debug($"[Config lib] Values patched: {successful}, failed: {failed} in asset: '{patch.File}'.");
             }
             catch (Exception exception)
             {
@@ -79,6 +79,13 @@ internal class AssetPatch
     private readonly string mAsset;
     private readonly List<IValuePatch> mPatches = new();
     private readonly ICoreAPI mApi;
+    private readonly HashSet<AssetCategory> mServerSideCategories = new()
+    {
+        AssetCategory.itemtypes,
+        AssetCategory.blocktypes,
+        AssetCategory.entities,
+        AssetCategory.recipes
+    };
 
     public AssetPatch(ICoreAPI api, string assetPath, Config config)
     {
@@ -114,9 +121,10 @@ internal class AssetPatch
         }
     }
 
-    public (int successful, int failed) Apply()
+    public (int successful, int failed) Apply(out bool serverSideAsset)
     {
-        JsonObject? asset = RetrieveAsset();
+        JsonObject? asset = RetrieveAsset(out serverSideAsset);
+        if (serverSideAsset) return (0, 0);
         if (asset == null) return (-1, -1);
 
         int count = 0;
@@ -139,8 +147,17 @@ internal class AssetPatch
         return (mPatches.Count - count, count);
     }
 
-    private JsonObject? RetrieveAsset()
+    private JsonObject? RetrieveAsset(out bool serverSide)
     {
+        serverSide = false;
+
+        AssetLocation location = new(mAsset);
+        if (mApi.Side == EnumAppSide.Client && mServerSideCategories.Contains(location.Category))
+        {
+            serverSide = true;
+            return null;
+        }
+
         IAsset? asset;
         try
         {
@@ -151,9 +168,10 @@ internal class AssetPatch
             mApi.Logger.Debug($"[Config lib] Asset '{mAsset}' not found, skipping it.");
             return null;
         }
-        
 
         if (asset == null) return null;
+
+        
 
         string json = Asset.BytesToString(asset.Data);
 

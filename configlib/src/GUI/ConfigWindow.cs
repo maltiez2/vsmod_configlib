@@ -36,6 +36,7 @@ internal class ConfigWindow
     private readonly Dictionary<string, Action<string, ControlButtons>> mCustom;
     private readonly HashSet<string> mMods = new();
     private readonly HashSet<int> mUnsavedDomains = new();
+    private readonly ConfigLibModSystem mConfigsSystem;
     private int mCurrentIndex = 0;
     private long mNextId = 0;
     private Style mStyle;
@@ -48,8 +49,9 @@ internal class ConfigWindow
     public ConfigWindow(ICoreClientAPI api)
     {
         mApi = api;
-        mDomains = ConfigLibModSystem.GetDomains();
-        mCustom = ConfigLibModSystem.GetCustomConfigs() ?? new();
+        mConfigsSystem = api.ModLoader.GetModSystem<ConfigLibModSystem>(true);
+        mDomains = mConfigsSystem.GetDomains();
+        mCustom = mConfigsSystem.GetCustomConfigs() ?? new();
 
         foreach (string mod in mDomains)
         {
@@ -110,7 +112,7 @@ internal class ConfigWindow
     {
         foreach (string domain in mDomains)
         {
-            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+            Config? config = mConfigsSystem.GetConfigImpl(domain);
             config?.WriteToFile();
         }
         mUnsavedDomains.Clear();
@@ -121,7 +123,7 @@ internal class ConfigWindow
     {
         foreach (string domain in mDomains)
         {
-            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+            Config? config = mConfigsSystem.GetConfigImpl(domain);
             config?.UpdateFromFile();
         }
     }
@@ -151,7 +153,7 @@ internal class ConfigWindow
     {
         if (!mDomains.Contains(domain)) return;
 
-        Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+        Config? config = mConfigsSystem.GetConfigImpl(domain);
         config?.WriteToFile();
 
         if (mUnsavedDomains.Contains(mCurrentIndex)) mUnsavedDomains.Remove(mCurrentIndex);
@@ -161,7 +163,7 @@ internal class ConfigWindow
     {
         if (!mDomains.Contains(domain)) return;
 
-        Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+        Config? config = mConfigsSystem.GetConfigImpl(domain);
         config?.UpdateFromFile();
 
         SetUnsavedChanges();
@@ -170,7 +172,7 @@ internal class ConfigWindow
     {
         if (!mDomains.Contains(domain)) return;
 
-        Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+        Config? config = mConfigsSystem.GetConfigImpl(domain);
         config?.RestoreToDefault();
 
         SetUnsavedChanges();
@@ -245,7 +247,7 @@ internal class ConfigWindow
 
         if (mDomains.Contains(domain))
         {
-            Config? config = ConfigLibModSystem.GetConfigStatic(domain);
+            Config? config = mConfigsSystem.GetConfigImpl(domain);
             if (config != null)
             {
                 ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world");
