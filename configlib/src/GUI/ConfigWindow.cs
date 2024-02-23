@@ -45,6 +45,8 @@ internal class ConfigWindow
     private bool mUnsavedChanges = false;
     private bool mCustomConfig = false;
     private string mFilter = "";
+    private Style mRedButton;
+    private Style mGreenButton;
 
     public ConfigWindow(ICoreClientAPI api)
     {
@@ -64,6 +66,17 @@ internal class ConfigWindow
 
         mStyle = new Style();
         LoadStyle();
+
+        mRedButton = new Style()
+        {
+            ColorButton = new(0.6f, 0.4f, 0.4f, 1.0f),
+            ColorButtonHovered = new(1.0f, 0.5f, 0.5f, 1.0f),
+        };
+        mGreenButton = new Style()
+        {
+            ColorButton = new(0.4f, 0.6f, 0.4f, 1.0f),
+            ColorButtonHovered = new(0.6f, 1.0f, 0.5f, 1.0f),
+        };
     }
 
     public bool Draw()
@@ -88,14 +101,12 @@ internal class ConfigWindow
                 }
                 if (!mUnsavedChanges) ImGui.EndDisabled();
                 DrawItemHint($"Saves all configs to files.");
-                /*if (mUnsavedChanges) ImGui.BeginDisabled();
                 if (ImGui.MenuItem("Restore All"))
                 {
                     mControlButtons.Restore = true;
                     RestoreAll();
                 }
                 DrawItemHint($"Retrieves values from config files.");
-                if (mUnsavedChanges) ImGui.EndDisabled();*/
                 ImGui.EndMenuBar();
             }
             DrawConfigList();
@@ -126,15 +137,19 @@ internal class ConfigWindow
             Config? config = mConfigsSystem.GetConfigImpl(domain);
             config?.UpdateFromFile();
         }
+
+        SetUnsavedChanges();
     }
 
     private void LoadStyle()
     {
         if (mStyleLoaded) return;
 
-        mStyle = new Style();
-        mStyle.ColorBackgroundMenuBar = (0, 0, 0, 0);
-        mStyle.BorderFrame = 0;
+        mStyle = new Style
+        {
+            ColorBackgroundMenuBar = (0, 0, 0, 0),
+            BorderFrame = 0
+        };
         mStyleLoaded = true;
     }
 
@@ -203,45 +218,74 @@ internal class ConfigWindow
         names = newNames.ToArray();
     }
 
-    private void DrawDomainTab(string domain)
+    private bool mConfirmDefaults = false;
+    private void DrawDomainTab(string domain) // @TODO refactor this nasty nested ifs
     {
         if (ImGui.BeginMenuBar())
         {
-            if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.BeginDisabled();
-            if (ImGui.MenuItem("Save"))
+            if (mConfirmDefaults)
             {
-                mControlButtons.Save = true;
-                SaveSettings(domain);
+                ImGui.Text("Defaults:");
+                ImGui.SameLine();
+
+                using (new StyleApplier(mRedButton))
+                {
+                    if (ImGui.Button("Cancel"))
+                    {
+                        mConfirmDefaults = false;
+                    }
+                }
+
+                using (new StyleApplier(mGreenButton))
+                {
+                    if (ImGui.Button("Confirm"))
+                    {
+                        mControlButtons.Defaults = true;
+                        mConfirmDefaults = false;
+                        DefaultSettings(domain);
+                    }
+
+                }
             }
-            if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.EndDisabled();
-            DrawItemHint($"Saves changes to config file.");
-            
-            
-            if (ImGui.MenuItem("Restore"))
+            else
             {
-                mControlButtons.Restore = true;
-                RestoreSettings(domain);
+                if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.BeginDisabled();
+                if (ImGui.MenuItem("Save"))
+                {
+                    mControlButtons.Save = true;
+                    SaveSettings(domain);
+                    mConfirmDefaults = false;
+                }
+                if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.EndDisabled();
+                DrawItemHint($"Saves changes to config file.");
+
+
+                if (ImGui.MenuItem("Restore"))
+                {
+                    mControlButtons.Restore = true;
+                    RestoreSettings(domain);
+                    mConfirmDefaults = false;
+                }
+                DrawItemHint($"Retrieves values from config file.");
+
+
+                if (!mCustom.ContainsKey(domain)) ImGui.BeginDisabled();
+                if (ImGui.MenuItem("Reload"))
+                {
+                    mControlButtons.Reload = true;
+                    mConfirmDefaults = false;
+                }
+                DrawItemHint($"Applies settings changes (if the mod supports this feature)");
+
+
+                if (!mCustom.ContainsKey(domain)) ImGui.EndDisabled();
+                if (ImGui.MenuItem("Defaults"))
+                {
+                    mConfirmDefaults = true;
+                }
+                DrawItemHint($"Sets settings to default values");
             }
-            DrawItemHint($"Retrieves values from config file.");
-            
-            
-            if (!mCustom.ContainsKey(domain)) ImGui.BeginDisabled();
-            if (ImGui.MenuItem("Reload"))
-            {
-                mControlButtons.Reload = true;
-            }
-            DrawItemHint($"Applies settings changes (if the mod supports this feature)");
-            
-            
-            if (!mCustom.ContainsKey(domain)) ImGui.EndDisabled();
-            if (ImGui.MenuItem("Defaults"))
-            {
-                mControlButtons.Defaults = true;
-                DefaultSettings(domain);
-            }
-            DrawItemHint($"Sets settings to default values");
-            
-            
+
             ImGui.EndMenuBar();
         }
 
@@ -280,23 +324,27 @@ internal class ConfigWindow
 
     private void DrawSetting(ConfigSetting setting)
     {
-        ImGui.PushItemWidth(250);
+        ImGui.PushItemWidth(300);
+
+        string name = setting.InGui == "" ? setting.YamlCode : setting.InGui;
+
+
         if (setting.Validation != null)
         {
-            DrawValidatedSetting(setting.YamlCode, setting);
+            DrawValidatedSetting(name, setting);
         }
         else
         {
             switch (setting.SettingType)
             {
                 case ConfigSettingType.Boolean:
-                    DrawBooleanSetting(setting.YamlCode, setting);
+                    DrawBooleanSetting(name, setting);
                     break;
                 case ConfigSettingType.Integer:
-                    DrawIntegerSetting(setting.YamlCode, setting);
+                    DrawIntegerSetting(name, setting);
                     break;
                 case ConfigSettingType.Float:
-                    DrawFloatSetting(setting.YamlCode, setting);
+                    DrawFloatSetting(name, setting);
                     break;
                 default:
                     ImGui.TextDisabled($"{setting.YamlCode}: unavailable");
@@ -392,7 +440,14 @@ internal class ConfigWindow
         int previous = value;
         if (min != null && max != null)
         {
-            ImGui.SliderInt(Title(name), ref value, min.Value, max.Value);
+            ImGui.PushItemWidth(50);
+            ImGui.DragInt(Title($"##{name}edit"), ref value, step ?? 1, min.Value, max.Value);
+            ImGui.SameLine();
+            ImGui.PopItemWidth();
+
+            ImGui.PushItemWidth(243);
+            ImGui.SliderInt(Title(name), ref value, min.Value, max.Value, "");
+            ImGui.PopItemWidth();
             StepInt(ref value, min, max, step);
         }
         else
@@ -432,7 +487,14 @@ internal class ConfigWindow
         float previous = value;
         if (min != null && max != null)
         {
-            ImGui.SliderFloat(Title(name), ref value, min.Value, max.Value);
+            ImGui.PushItemWidth(50);
+            ImGui.DragFloat(Title($"##{name}edit"), ref value, 1, min.Value, max.Value);
+            ImGui.SameLine();
+            ImGui.PopItemWidth();
+
+            ImGui.PushItemWidth(243);
+            ImGui.SliderFloat(Title(name), ref value, min.Value, max.Value, "");
+            ImGui.PopItemWidth();
             StepFloat(ref value, min, max, step);
         }
         else

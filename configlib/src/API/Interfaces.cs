@@ -10,7 +10,9 @@ public interface IConfigProvider
     IEnumerable<string> Domains { get; }
     IConfig? GetConfig(string domain);
     ISetting? GetSetting(string domain, string code);
-    public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate);
+    void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate);
+    
+    event Action? ConfigsLoaded;
 }
 
 public interface IConfig

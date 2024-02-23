@@ -60,14 +60,6 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
 
         ConfigsLoaded?.Invoke();
     }
-    public override void AssetsFinalize(ICoreAPI api)
-    {
-        if (api is ICoreClientAPI clientApi)
-        {
-            mGuiManager = new(clientApi);
-            clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
-        }
-    }
     public override double ExecuteOrder() => 0.01;
     public override void Dispose()
     {
@@ -94,11 +86,18 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
 
         foreach ((string domain, Config config) in configs)
         {
+            mDomains.Add(domain);
             mConfigs[domain] = config;
             config.Apply();
         }
 
         ConfigsLoaded?.Invoke();
+
+        if (mApi is ICoreClientAPI clientApi)
+        {
+            mGuiManager = new(clientApi);
+            clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
+        }
     }
     private void LoadConfigs()
     {

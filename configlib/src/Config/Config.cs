@@ -84,6 +84,7 @@ public class Config : IConfig
         LoadedFromFile = false;
         mDefinition = definition;
         mPatches = new(api, this);
+        FillConfigBlocks();
     }
     internal void Apply() => mPatches.Apply();
 

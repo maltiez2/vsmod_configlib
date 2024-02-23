@@ -247,15 +247,16 @@ internal class ConfigParser
         string code = property.Name;
         string name = (string)((property.Value["name"] as JValue)?.Value ?? "");
         string? comment = (string?)(property.Value["comment"] as JValue)?.Value;
+        string inGuiName = (string)((property.Value["ingui"] as JValue)?.Value ?? "");
 
         if (property.Value is not JObject propertyValue) throw new InvalidConfigException("Invalid config formatting");
 
-        (JToken value, ConfigSetting setting) = GetValue(code, name, comment, propertyValue);
+        (JToken value, ConfigSetting setting) = GetValue(code, name, comment, propertyValue, inGuiName);
         JProperty result = new(name, value);
         return (result, setting);
     }
 
-    private (JToken, ConfigSetting) GetValue(string code, string name, string? comment, JObject property)
+    private (JToken, ConfigSetting) GetValue(string code, string name, string? comment, JObject property, string inGuiName)
     {
         if (!property.ContainsKey("default") || property["default"] is not JToken defaultValue)
         {
@@ -264,24 +265,24 @@ internal class ConfigParser
 
         if (property.ContainsKey("mapping") && property["mapping"] is JObject mapping)
         {
-            return GetMappingValue(code, name, comment, defaultValue, mapping, property);
+            return GetMappingValue(code, name, comment, defaultValue, mapping, property, inGuiName);
         }
 
         if (property.ContainsKey("range") && property["range"] is JObject range)
         {
-            return GetRangeValue(code, name, comment, defaultValue, range, property);
+            return GetRangeValue(code, name, comment, defaultValue, range, property, inGuiName);
         }
 
         if (property.ContainsKey("values") && property["values"] is JArray values)
         {
-            return GetValuesValue(code, name, comment, defaultValue, values, property);
+            return GetValuesValue(code, name, comment, defaultValue, values, property, inGuiName);
         }
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, null, null, GetWeight(property));
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, null, null, GetWeight(property), inGuiName);
         mSettings.Add(code, setting);
         return (defaultValue, setting);
     }
-    private (JToken, ConfigSetting) GetMappingValue(string code, string name, string? comment, JToken defaultValue, JObject mapping, JObject property)
+    private (JToken, ConfigSetting) GetMappingValue(string code, string name, string? comment, JToken defaultValue, JObject mapping, JObject property, string inGuiName)
     {
         if ((defaultValue as JValue)?.Value is not string value)
         {
@@ -312,11 +313,11 @@ internal class ConfigParser
             settingMapping.Add(key, new(mappingValue));
         }
 
-        ConfigSetting setting = new(name, new(validatedValue), mSettingType, comment, new(settingMapping), value, GetWeight(property));
+        ConfigSetting setting = new(name, new(validatedValue), mSettingType, comment, new(settingMapping), value, GetWeight(property), inGuiName);
         mSettings.Add(code, setting);
         return (new JValue(value), setting);
     }
-    private (JToken, ConfigSetting) GetRangeValue(string code, string name, string? comment, JToken defaultValue, JObject range, JObject property)
+    private (JToken, ConfigSetting) GetRangeValue(string code, string name, string? comment, JToken defaultValue, JObject range, JObject property, string inGuiName)
     {
 
         JsonObject? min = range.ContainsKey("min") ? new(range["min"]) : null;
@@ -324,11 +325,11 @@ internal class ConfigParser
         JsonObject? step = range.ContainsKey("step") ? new(range["step"]) : null;
         Validation parsedValidation = new(min, max, step);
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation, null, GetWeight(property));
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation, null, GetWeight(property), inGuiName);
         mSettings.Add(code, setting);
         return (defaultValue, setting);
     }
-    private (JToken, ConfigSetting) GetValuesValue(string code, string name, string? comment, JToken defaultValue, JArray values, JObject property)
+    private (JToken, ConfigSetting) GetValuesValue(string code, string name, string? comment, JToken defaultValue, JArray values, JObject property, string inGuiName)
     {
         List<JsonObject> parsedValues = new();
         foreach (JToken value in values)
@@ -336,7 +337,7 @@ internal class ConfigParser
             parsedValues.Add(new(value));
         }
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, new(parsedValues), null, GetWeight(property));
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, new(parsedValues), null, GetWeight(property), inGuiName);
         mSettings.Add(code, setting);
         return (defaultValue, setting);
     }
