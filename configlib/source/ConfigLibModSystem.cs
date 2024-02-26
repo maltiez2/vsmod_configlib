@@ -77,7 +77,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         mCustomConfigs.Clear();
         if (mApi?.Side == EnumAppSide.Client && mGuiManager != null)
         {
-            //mApi.ModLoader.GetModSystem<ImGuiModSystem>().SetUpImGuiWindows -= mGuiManager.Draw;
+            mApi.ModLoader.GetModSystem<ImGuiModSystem>().Draw += mGuiManager.Draw;
             mGuiManager.Dispose();
         }
 
@@ -100,7 +100,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         if (mApi is ICoreClientAPI clientApi)
         {
             mGuiManager = new(clientApi);
-            //clientApi.ModLoader.GetModSystem<ImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
+            clientApi.ModLoader.GetModSystem<ImGuiModSystem>().Draw += mGuiManager.Draw;
         }
     }
     private void LoadConfigs()

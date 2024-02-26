@@ -1,12 +1,12 @@
 ﻿using ModdingTools;
 using System;
 using Vintagestory.API.Client;
+using VSImGui.src.ImGui;
 
 namespace ConfigLib
 {
     internal class GuiManager : IDisposable
     {
-        private readonly GuiDialog dialog;
         private readonly ConfigWindow mConfigWindow;
 
         private bool mDisposed;
@@ -18,35 +18,26 @@ namespace ConfigLib
             api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
             api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
 
-            dialog = new VanillaGuiDialog(api);
-
             mConfigWindow = new(api);
             mInstance = this;
         }
 
-        public void Draw()
+        public VSDialogStatus Draw(float deltaSeconds)
         {
-            if (mShowConfig && !mConfigWindow.Draw())
+            if (!mShowConfig) return VSDialogStatus.Closed;
+            
+            if (!mConfigWindow.Draw())
             {
-                dialog.TryClose();
                 mShowConfig = false;
+                return VSDialogStatus.Closed;
             }
+
+            return VSDialogStatus.GrabMouse;
         }
 
-        public bool ShowConfigWindow()
+        public void ShowConfigWindow()
         {
-            if (dialog?.IsOpened() == true)
-            {
-                dialog.TryClose();
-                mShowConfig = false;
-            }
-            else
-            {
-                dialog?.TryOpen();
-                mShowConfig = true;
-            }
-
-            return true;
+            mShowConfig = !mShowConfig;
         }
 
         public static bool ShowConfigWindowStatic()
@@ -58,16 +49,7 @@ namespace ConfigLib
 
         private bool ShowConfigWindow(KeyCombination keyCombination)
         {
-            if (dialog?.IsOpened() == true)
-            {
-                dialog.TryClose();
-                mShowConfig = false;
-            }
-            else
-            {
-                dialog?.TryOpen();
-                mShowConfig = true;
-            }
+            mShowConfig = !mShowConfig;
 
             return true;
         }
@@ -78,7 +60,7 @@ namespace ConfigLib
             {
                 if (disposing)
                 {
-                    dialog.Dispose();
+                    // Nothing to dispose
                 }
 
                 mDisposed = true;
