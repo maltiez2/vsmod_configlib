@@ -42,6 +42,7 @@
     <SubmodulesDir>$(ProjectDir)\..</SubmodulesDir>
     <ImGuiSubmodule>$(SubmodulesDir)\VintageStory_ImGui\VSImGui</ImGuiSubmodule>
     <ImGuiSubmoduleOutput>$(ImGuiSubmodule)\bin\$(Configuration)\Mods\vsimgui</ImGuiSubmoduleOutput>
+    <ImGuiReleasesFolder>$(ImGuiSubmodule)\Releases</ImGuiReleasesFolder>
     <GameDirectory>$(VINTAGE_STORY)</GameDirectory>
     <ModIconFile>$(ProjectDir)\resources\modicon.png</ModIconFile>
     <ReleasesDir>$(ProjectDir)\Releases</ReleasesDir>
@@ -174,9 +175,15 @@
 
   <!-- Copies modicon if it exists into output directory -->
   <Target Name="CopyFilesToOutput" AfterTargets="ModInfo">
+    <ItemGroup>
+      <ImGuiPacked Include="$(ImGuiReleasesFolder)/*.zip" />
+    </ItemGroup>
     <ItemGroup Condition="Exists('$(ModIconFile)')">
       <ModIcon Include="$(ModIconFile)" />
     </ItemGroup>
+    <!-- Puts imgui archive into Mods folder to load as dependency on statup -->
+    <Copy SourceFiles="@(ImGuiPacked)" DestinationFolder="$(OutputDir)" />
+    <!-- Puts modicon to output folder -->
     <Copy SourceFiles="@(ModIcon)" DestinationFolder="$(OutputPath)" Condition="Exists('$(ModIconFile)')" />
   </Target>
 
