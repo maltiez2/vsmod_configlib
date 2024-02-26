@@ -73,12 +73,8 @@
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <!-- Additional dependencies: will be merged into main dll by ILRepack -->
-    <Reference Include="SimpleExpressionEngine">
-      <HintPath>..\libs\SimpleExpressionEngine.dll</HintPath>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-    </Reference>
     <Reference Include="YamlDotNet">
-      <HintPath>..\libs\YamlDotNet.dll</HintPath>
+      <HintPath>..\lib\YamlDotNet.dll</HintPath>
     </Reference>
     <!-- Vintage Story dependencies: wont be copied into output directory -->
     <Reference Include="OpenTK.Compute">
@@ -136,6 +132,11 @@
     </Reference>
   </ItemGroup>
 
+  <!-- SimpleExpressionEngine project ref; Is used for patching values with expressions -->
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleExpressionEngine\SimpleExpressionEngine\SimpleExpressionEngine.csproj" />
+  </ItemGroup>
+
   <!-- ILRepack nugget package ref; Is used to merge multiple dlls into one to avoid conflicts -->
   <ItemGroup>
     <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
@@ -143,7 +144,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
-
+  
   <!-- Creates/updates modinfo.json file in build directory -->
   <Target Name="ModInfo" AfterTargets="ILRepack">
     <PropertyGroup>
@@ -176,7 +177,7 @@
     <ItemGroup Condition="Exists('$(ModIconFile)')">
       <ModIcon Include="$(ModIconFile)" />
     </ItemGroup>
-    <Copy SourceFiles="@(ModIcon)" DestinationFolder="$(OutputPath)" Condition="Exists('$(ModIconFile)')"/>
+    <Copy SourceFiles="@(ModIcon)" DestinationFolder="$(OutputPath)" Condition="Exists('$(ModIconFile)')" />
   </Target>
 
   <!-- Archives output directory into zip and puts it into Releases folder -->
