@@ -1,0 +1,3 @@
+[submodule "VintageStory_ImGui"]
+	path = VintageStory_ImGui
+	url = https://github.com/maltiez2/VintageStory_ImGui

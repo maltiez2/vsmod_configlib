@@ -6,8 +6,8 @@ using Vintagestory.API.Datastructures;
 using Newtonsoft.Json.Linq;
 using VSImGui;
 using System;
-using Vintagestory.API.MathTools;
 using ConfigLib.Formatting;
+using Vintagestory.API.Config;
 
 namespace ConfigLib;
 
@@ -37,16 +37,16 @@ internal class ConfigWindow
     private readonly HashSet<string> mMods = new();
     private readonly HashSet<int> mUnsavedDomains = new();
     private readonly ConfigLibModSystem mConfigsSystem;
+    private readonly Style mRedButton;
+    private readonly Style mGreenButton;
+    private readonly Style mStyle;
+
     private int mCurrentIndex = 0;
     private long mNextId = 0;
-    private Style mStyle;
-    private bool mStyleLoaded = false;
     private ControlButtons mControlButtons = new();
     private bool mUnsavedChanges = false;
     private bool mCustomConfig = false;
     private string mFilter = "";
-    private Style mRedButton;
-    private Style mGreenButton;
 
     public ConfigWindow(ICoreClientAPI api)
     {
@@ -64,9 +64,11 @@ internal class ConfigWindow
             if (!mMods.Contains(mod)) mMods.Add(mod);
         }
 
-        mStyle = new Style();
-        LoadStyle();
-
+        mStyle = new Style
+        {
+            ColorBackgroundMenuBar = (0, 0, 0, 0),
+            BorderFrame = 0
+        };
         mRedButton = new Style()
         {
             ColorButton = new(0.6f, 0.4f, 0.4f, 1.0f),
@@ -124,7 +126,7 @@ internal class ConfigWindow
         foreach (string domain in mDomains)
         {
             Config? config = mConfigsSystem.GetConfigImpl(domain);
-            config?.WriteToFile();
+            if (mApi.IsSinglePlayer) config?.WriteToFile();
         }
         mUnsavedDomains.Clear();
         mUnsavedChanges = false;
@@ -132,6 +134,8 @@ internal class ConfigWindow
 
     public void RestoreAll()
     {
+        if (!mApi.IsSinglePlayer) return;
+
         foreach (string domain in mDomains)
         {
             Config? config = mConfigsSystem.GetConfigImpl(domain);
@@ -139,18 +143,6 @@ internal class ConfigWindow
         }
 
         SetUnsavedChanges();
-    }
-
-    private void LoadStyle()
-    {
-        if (mStyleLoaded) return;
-
-        mStyle = new Style
-        {
-            ColorBackgroundMenuBar = (0, 0, 0, 0),
-            BorderFrame = 0
-        };
-        mStyleLoaded = true;
     }
 
     private void DrawConfigList()
@@ -221,12 +213,23 @@ internal class ConfigWindow
     private bool mConfirmDefaults = false;
     private void DrawDomainTab(string domain) // @TODO refactor this nasty nested ifs
     {
-        if (ImGui.BeginMenuBar())
+        if ((mCustom.ContainsKey(domain) || mApi.IsSinglePlayer) && ImGui.BeginMenuBar())
         {
             if (mConfirmDefaults)
             {
                 ImGui.Text("Defaults:");
                 ImGui.SameLine();
+
+                using (new StyleApplier(mGreenButton))
+                {
+                    if (ImGui.Button("Confirm"))
+                    {
+                        mControlButtons.Defaults = true;
+                        mConfirmDefaults = false;
+                        if (mApi.IsSinglePlayer) DefaultSettings(domain);
+                    }
+
+                }
 
                 using (new StyleApplier(mRedButton))
                 {
@@ -235,17 +238,6 @@ internal class ConfigWindow
                         mConfirmDefaults = false;
                     }
                 }
-
-                using (new StyleApplier(mGreenButton))
-                {
-                    if (ImGui.Button("Confirm"))
-                    {
-                        mControlButtons.Defaults = true;
-                        mConfirmDefaults = false;
-                        DefaultSettings(domain);
-                    }
-
-                }
             }
             else
             {
@@ -253,7 +245,7 @@ internal class ConfigWindow
                 if (ImGui.MenuItem("Save"))
                 {
                     mControlButtons.Save = true;
-                    SaveSettings(domain);
+                    if (mApi.IsSinglePlayer) SaveSettings(domain);
                     mConfirmDefaults = false;
                 }
                 if (!mCustomConfig && !mUnsavedDomains.Contains(mCurrentIndex)) ImGui.EndDisabled();
@@ -263,7 +255,7 @@ internal class ConfigWindow
                 if (ImGui.MenuItem("Restore"))
                 {
                     mControlButtons.Restore = true;
-                    RestoreSettings(domain);
+                    if (mApi.IsSinglePlayer) RestoreSettings(domain);
                     mConfirmDefaults = false;
                 }
                 DrawItemHint($"Retrieves values from config file.");
@@ -291,16 +283,23 @@ internal class ConfigWindow
 
         if (mDomains.Contains(domain))
         {
-            Config? config = mConfigsSystem.GetConfigImpl(domain);
-            if (config != null)
+            if (mApi.IsSinglePlayer)
             {
-                ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world");
-                ImGui.Separator();
-                DrawModConfig(config);
+                Config? config = mConfigsSystem.GetConfigImpl(domain);
+                if (config != null)
+                {
+                    ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world");
+                    ImGui.Separator();
+                    DrawModConfig(config);
+                }
+                else
+                {
+                    ImGui.Text("\nConfig is unavailable\n");
+                }
             }
             else
             {
-                ImGui.Text("\nConfig is unavailable\n");
+                ImGui.Text("Settings unavailable in multiplayer");
             }
         }
 
@@ -328,6 +327,7 @@ internal class ConfigWindow
 
         string name = setting.InGui == "" ? setting.YamlCode : setting.InGui;
 
+        if (Lang.HasTranslation(name)) name = Lang.Get(name);
 
         if (setting.Validation != null)
         {
@@ -440,13 +440,16 @@ internal class ConfigWindow
         int previous = value;
         if (min != null && max != null)
         {
-            ImGui.PushItemWidth(50);
+            ImGuiSliderFlags flags = ImGuiSliderFlags.None;
+            if (setting.Logarithmic) flags |= ImGuiSliderFlags.Logarithmic;
+
+            ImGui.PushItemWidth(70);
             ImGui.DragInt(Title($"##{name}edit"), ref value, step ?? 1, min.Value, max.Value);
             ImGui.SameLine();
             ImGui.PopItemWidth();
 
-            ImGui.PushItemWidth(243);
-            ImGui.SliderInt(Title(name), ref value, min.Value, max.Value, "");
+            ImGui.PushItemWidth(223);
+            ImGui.SliderInt(Title(name), ref value, min.Value, max.Value, "", flags);
             ImGui.PopItemWidth();
             StepInt(ref value, min, max, step);
         }
@@ -487,13 +490,16 @@ internal class ConfigWindow
         float previous = value;
         if (min != null && max != null)
         {
-            ImGui.PushItemWidth(50);
+            ImGuiSliderFlags flags = ImGuiSliderFlags.None;
+            if (setting.Logarithmic) flags |= ImGuiSliderFlags.Logarithmic;
+
+            ImGui.PushItemWidth(70);
             ImGui.DragFloat(Title($"##{name}edit"), ref value, 1, min.Value, max.Value);
             ImGui.SameLine();
             ImGui.PopItemWidth();
 
-            ImGui.PushItemWidth(243);
-            ImGui.SliderFloat(Title(name), ref value, min.Value, max.Value, "");
+            ImGui.PushItemWidth(223);
+            ImGui.SliderFloat(Title(name), ref value, min.Value, max.Value, "", flags);
             ImGui.PopItemWidth();
             StepFloat(ref value, min, max, step);
         }

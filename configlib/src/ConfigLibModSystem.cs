@@ -20,6 +20,8 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     public IConfig? GetConfig(string domain) => GetConfigImpl(domain);
     public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
     public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => mCustomConfigs.TryAdd(domain, drawDelegate);
+    public IConfig? GetServerConfig(string domain) => GetServerConfigImpl(domain);
+    public ISetting? GetServerSetting(string domain, string code) => GetServerConfigImpl(domain)?.GetSetting(code);
 
     /// <summary>
     /// On Server: right after configs are applied<br/>
@@ -29,9 +31,11 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
 
     internal HashSet<string> GetDomains() => mDomains;
     internal Config? GetConfigImpl(string domain) => mConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
+    internal Config? GetServerConfigImpl(string domain) => mServerConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
     internal Dictionary<string, Action<string, ControlButtons>>? GetCustomConfigs() => mCustomConfigs;
 
     private readonly Dictionary<string, Config> mConfigs = new();
+    private readonly Dictionary<string, Config> mServerConfigs = new();
     private readonly HashSet<string> mDomains = new();
     private readonly Dictionary<string, Action<string, ControlButtons>> mCustomConfigs = new();
     private GuiManager? mGuiManager;
@@ -73,7 +77,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         mCustomConfigs.Clear();
         if (mApi?.Side == EnumAppSide.Client && mGuiManager != null)
         {
-            mApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows -= mGuiManager.Draw;
+            //mApi.ModLoader.GetModSystem<ImGuiModSystem>().SetUpImGuiWindows -= mGuiManager.Draw;
             mGuiManager.Dispose();
         }
 
@@ -87,7 +91,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         foreach ((string domain, Config config) in configs)
         {
             mDomains.Add(domain);
-            mConfigs[domain] = config;
+            mServerConfigs[domain] = config;
             config.Apply();
         }
 
@@ -96,7 +100,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         if (mApi is ICoreClientAPI clientApi)
         {
             mGuiManager = new(clientApi);
-            clientApi.ModLoader.GetModSystem<VSImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
+            //clientApi.ModLoader.GetModSystem<ImGuiModSystem>().SetUpImGuiWindows += mGuiManager.Draw;
         }
     }
     private void LoadConfigs()
@@ -130,6 +134,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         Config config = new(mApi, domain, parsedConfig);
         mConfigs.Add(domain, config);
         mDomains.Add(domain);
+        if (mApi.Side == EnumAppSide.Server) mServerConfigs.Add(domain, config);
 
         registry?.Register(domain, config);
     }

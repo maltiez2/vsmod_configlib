@@ -167,15 +167,17 @@ internal class ConfigParser
             itemObject["range"] is JObject range
         )
         {
-            string? min = range.ContainsKey("min") ? (item["min"] as JValue)?.Value?.ToString() : null;
-            string? max = range.ContainsKey("max") ? (item["max"] as JValue)?.Value?.ToString() : null;
-            string? step = range.ContainsKey("max") ? (item["max"] as JValue)?.Value?.ToString() : null;
+            JsonObject? rangeObject = new JsonObject(item)["range"];
+            
+            float? min = rangeObject?.KeyExists("min") == true ? rangeObject["min"]?.AsFloat() : null;
+            float? max = rangeObject?.KeyExists("max") == true ? rangeObject["max"]?.AsFloat() : null;
+            float? step = rangeObject?.KeyExists("step") == true ? rangeObject["step"]?.AsFloat() : null;
 
             string minMax = (min != null, max != null) switch
             {
                 (true, true) => $"from {min} to {max}",
                 (true, false) => $"greater than {min}",
-                (false, true) => $"lesser than {max}",
+                (false, true) => $"less than {max}",
                 _ => ""
             };
 
@@ -323,9 +325,10 @@ internal class ConfigParser
         JsonObject? min = range.ContainsKey("min") ? new(range["min"]) : null;
         JsonObject? max = range.ContainsKey("max") ? new(range["max"]) : null;
         JsonObject? step = range.ContainsKey("step") ? new(range["step"]) : null;
+        bool logarithmic = property.ContainsKey("logarithmic") && new JsonObject(property["logarithmic"]).AsBool(false);
         Validation parsedValidation = new(min, max, step);
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation, null, GetWeight(property), inGuiName);
+        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation, null, GetWeight(property), inGuiName, logarithmic);
         mSettings.Add(code, setting);
         return (defaultValue, setting);
     }

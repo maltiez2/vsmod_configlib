@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using YamlDotNet.Serialization;
@@ -16,7 +17,6 @@ public class Config : IConfig
     public Dictionary<string, ConfigSetting> Settings => mSettings;
     public string ConfigFilePath { get; private set; }
     public string ConfigFileContent => mYamlConfig;
-    public bool LoadedFromFile { get; private set; }
     public JsonObject Definition => mDefinition;
     public int Version { get; private set; }
     public SortedDictionary<float, IConfigBlock> ConfigBlocks => mConfigBlocks;
@@ -60,7 +60,6 @@ public class Config : IConfig
             using StreamWriter outputFile = new(ConfigFilePath);
             outputFile.Write(mYamlConfig);
             mApi.Logger.Notification($"[Config lib] ({domain}) Settings loaded: {mSettings.Count}");
-            LoadedFromFile = true;
             mPatches = new(api, this);
         }
         catch (ConfigLibException exception)
@@ -68,7 +67,6 @@ public class Config : IConfig
             mApi.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
             mSettings = new();
             mYamlConfig = "<failed to load>";
-            LoadedFromFile = false;
             mPatches = new(api, this);
             return;
         }
@@ -81,7 +79,6 @@ public class Config : IConfig
         Version = -1;
         ConfigFilePath = Path.Combine(mApi.DataBasePath, "ModConfig", $"{mDomain}.yaml");
         mYamlConfig = "<not available on client in multiplayer>";
-        LoadedFromFile = false;
         mDefinition = definition;
         mPatches = new(api, this);
         FillConfigBlocks();
@@ -95,7 +92,7 @@ public class Config : IConfig
     }
     public void WriteToFile()
     {
-        if (!LoadedFromFile) return;
+        if (mApi is ICoreClientAPI { IsSinglePlayer: false }) return;
         try
         {
             WriteValues();
@@ -142,7 +139,7 @@ public class Config : IConfig
     }
     public void RestoreToDefault()
     {
-        if (LoadedFromFile)
+        if (mApi is ICoreClientAPI { IsSinglePlayer: true })
         {
             mSettings.Clear();
             WriteYaml(mSettings, mDefinition);

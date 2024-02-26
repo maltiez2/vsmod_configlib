@@ -1,82 +1,185 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
+  <!-- Mod info -->
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>bin\$(Configuration)\Mods\mod</OutputPath>
-    <Nullable>enable</Nullable>
+    <ModName>Config lib</ModName>
+    <GameVersion>1.19.4-rc.2</GameVersion>
+    <Version>1.0.0-pre.1</Version>
+    <ModId>configlib</ModId>
+    <Description>Configs library with YAML config format and in-game GUI</Description>
+    <Side>Universal</Side>
+    <RequiredOnClient>true</RequiredOnClient>
+    <RequiredOnServer>false</RequiredOnServer>
   </PropertyGroup>
 
+  <!-- Authors -->
   <ItemGroup>
-	<PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
-	  <PrivateAssets>all</PrivateAssets>
-	  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-	</PackageReference>
+    <ModInfoAuthors Include="Maltiez" />
+  </ItemGroup>
+
+  <!-- Dependencies -->
+  <ItemGroup>
+    <Dependencies Include="game">
+      <Version>$(GameVersion)</Version>
+    </Dependencies>
+    <Dependencies Include="vsimgui">
+      <Version>1.0.0-pre.1</Version>
+    </Dependencies>
+  </ItemGroup>
+
+  <!-- Project settings -->
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- Paths -->
+  <PropertyGroup>
+    <ProjectDir>$(MSBuildProjectDirectory)</ProjectDir>
+    <OutputPath>bin\$(Configuration)\Mods\mod</OutputPath>
+    <ImGuiSubmoduleOutput>$(ProjectDir)\..\VintageStory_ImGui\VSImGui\bin\$(Configuration)\Mods\mod</ImGuiSubmoduleOutput>
+    <GameDirectory>$(VINTAGE_STORY)</GameDirectory>
+    <ModIconFile>$(ProjectDir)\resources\modicon.png</ModIconFile>
+    <ReleasesDir>$(ProjectDir)\Releases</ReleasesDir>
+    <ReleaseFile>$(ModId)_$(Version).zip</ReleaseFile>
+    <ReleasePath>$(ReleasesDir)\$(ReleaseFile)</ReleasePath>
+  </PropertyGroup>
+
+  <!-- ILRepack nugget package ref; Is used to merge multiple dlls into one to avoid conflicts -->
+  <ItemGroup>
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Builds dependency projects and copies theirs ddls into output directory -->
+  <ItemGroup>
+    <ProjectReference Include="$(ProjectDir)\..\VintageStory_ImGui\VSImGui\VSImGui.csproj" />
+  </ItemGroup>
+
+  <!-- References to libraries that are being used in project -->
+  <ItemGroup>
+    <!-- ImGUI for in-game GUI for editing configs -->
     <Reference Include="ImGui.NET">
-      <HintPath>..\..\VSImGui\Releases\vsimgui\ImGui.NET.dll</HintPath>
+      <HintPath>$(ImGuiSubmoduleOutput)\ImGui.NET.dll</HintPath>
       <Private>False</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
+    <Reference Include="VSImGui">
+      <HintPath>$(ImGuiSubmoduleOutput)\VSImGui.dll</HintPath>
+      <Private>False</Private>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+    </Reference>
+    <!-- Additional dependencies -->
     <Reference Include="SimpleExpressionEngine">
       <HintPath>..\libs\SimpleExpressionEngine.dll</HintPath>
       <Private>False</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
-    <Reference Include="VintagestoryAPI">
-      <HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="VSImGui">
-      <HintPath>..\..\VSImGui\Releases\vsimgui\VSImGui.dll</HintPath>
-      <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-    </Reference>
-    <Reference Include="VSSurvivalMod">
-      <HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="VSEssentials">
-      <HintPath>$(VINTAGE_STORY)/Mods/VSEssentials.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="VSCreativeMod">
-      <HintPath>$(VINTAGE_STORY)/Mods/VSCreativeMod.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="0Harmony">
-      <HintPath>$(VINTAGE_STORY)/Lib/0Harmony.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="VintagestoryLib">
-      <HintPath>$(VINTAGE_STORY)/VintagestoryLib.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="protobuf-net">
-      <HintPath>$(VINTAGE_STORY)/Lib/protobuf-net.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="cairo-sharp">
-      <HintPath>$(VINTAGE_STORY)/Lib/cairo-sharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="YamlDotNet">
       <HintPath>..\libs\YamlDotNet.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <!-- Vintage Story dependencies: wont be copied into output directory -->
+    <Reference Include="OpenTK.Compute">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Compute.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Core">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Graphics">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Graphics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Input">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Input.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Mathematics">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Mathematics.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Windowing.Common">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Windowing.Common.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Windowing.Desktop">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Windowing.Desktop.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="OpenTK.Windowing.GraphicsLibraryFramework">
+      <HintPath>$(GameDirectory)\Lib\OpenTK.Windowing.GraphicsLibraryFramework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="protobuf-net">
+      <HintPath>$(GameDirectory)/Lib/protobuf-net.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDirectory)/Lib/0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GameDirectory)/Lib/Newtonsoft.Json.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- Vintage Story own libraries: wont be copied into output directory -->
+    <Reference Include="VintagestoryAPI">
+      <HintPath>$(GameDirectory)/VintagestoryAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VintagestoryLib">
+      <HintPath>$(GameDirectory)/VintagestoryLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
-    <ItemGroup>
-      <Content Include="assets\**">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
-      <None Remove="assets\configlib\config\format-prototype.json" />
-      <Content Include="modinfo.json">
-          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
+  <!-- Creates/updates modinfo.json file in build directory -->
+  <Target Name="ModInfo" AfterTargets="ILRepack">
+    <PropertyGroup>
+      <ModInfo>
+{
+    "type": "code",
+    "name": "$(ModName)",
+    "modid": "$(ModId)",
+    "version": "$(Version)",
+
+    "description": "$(Description)",
+    "authors": [ @(ModInfoAuthors->'"%(Identity)"', ', ') ],
+
+    "dependencies": {
+        @(Dependencies->'"%(Identity)": "%(Version)"', ', ')
+    },
+    
+    "side" : "$(Side)",
+	  "requiredOnClient": $(RequiredOnClient),
+	  "requiredOnServer": $(RequiredOnServer)
+}
+      </ModInfo>
+    </PropertyGroup>
+    <Message Text="Generating modinfo.json" Importance="high" />
+    <WriteLinesToFile File="$(OutputPath)/modinfo.json" Lines="$(ModInfo)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
+
+  <!-- Copies modicon if it exists into output directory -->
+  <Target Name="CopyFilesToOutput" AfterTargets="ModInfo">
+    <ItemGroup Condition="Exists('$(ModIconFile)')">
+      <ModIcon Include="$(ModIconFile)" />
     </ItemGroup>
+    <Message Text="Copying @(ModIcon) to output" Importance="high" />
+    <Copy SourceFiles="@(ModIcon)" DestinationFolder="$(OutputPath)" Condition="Exists('$(ModIconFile)')"/>
+  </Target>
+
+  <!-- Archives output directory into zip and puts it into Releases folder -->
+  <Target Name="ZipFiles" AfterTargets="CopyFilesToOutput" Condition=" '$(Configuration)' == 'Release' ">
+    <Message Text="Pachaging into '$(ReleaseFile)'" Importance="high" />
+    <MakeDir Directories="$(ReleasesDir)" />
+    <Delete Files="$(ReleasePath)" />
+    <ZipDirectory SourceDirectory="$(OutputPath)" DestinationFile="$(ReleasePath)" />
+  </Target>
 
 </Project>

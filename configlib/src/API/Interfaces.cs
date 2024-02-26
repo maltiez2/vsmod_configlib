@@ -10,6 +10,8 @@ public interface IConfigProvider
     IEnumerable<string> Domains { get; }
     IConfig? GetConfig(string domain);
     ISetting? GetSetting(string domain, string code);
+    IConfig? GetServerConfig(string domain);
+    ISetting? GetServerSetting(string domain, string code);
     void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate);
     
     event Action? ConfigsLoaded;
@@ -19,7 +21,6 @@ public interface IConfig
 {
     string ConfigFilePath { get; }
     string ConfigFileContent { get; }
-    bool LoadedFromFile { get; }
 
     void WriteToFile();
     bool ReadFromFile();

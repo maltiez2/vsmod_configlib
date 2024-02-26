@@ -16,8 +16,9 @@ public class ConfigSetting : ISetting
     public Validation? Validation { get; private set; }
     public float SortingWeight { get; private set; }
     public string InGui { get; private set; }
+    public bool Logarithmic { get; private set; }
 
-    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType, string? comment = null, Validation? validation = null, string? mappingKey = null, float sortingWeight = 0, string inGui = "")
+    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType, string? comment = null, Validation? validation = null, string? mappingKey = null, float sortingWeight = 0, string inGui = "", bool logarithmic = false)
     {
         Value = defaultValue;
         DefaultValue = defaultValue;
@@ -28,6 +29,7 @@ public class ConfigSetting : ISetting
         YamlCode = yamlCode;
         SortingWeight = sortingWeight;
         InGui = inGui;
+        Logarithmic = logarithmic;
     }
     public ConfigSetting(ConfigSettingPacket settings)
     {
@@ -39,6 +41,7 @@ public class ConfigSetting : ISetting
         Comment = settings.Comment;
         SortingWeight= settings.SortingWeight;
         InGui = settings.InGui;
+        Logarithmic = settings.Logarithmic;
         if (settings.Validation != null) Validation = settings.Validation;
     }
 
@@ -63,6 +66,7 @@ public class ConfigSettingPacket
     public ValidationPacket? Validation { get; private set; }
     public float SortingWeight { get; private set; } = 0;
     public string InGui { get; private set; } = "";
+    public bool Logarithmic { get; private set; }
 
     public ConfigSettingPacket() { }
     public ConfigSettingPacket(ConfigSetting settings)
@@ -75,6 +79,7 @@ public class ConfigSettingPacket
         Comment = settings.Comment;
         SortingWeight = settings.SortingWeight;
         InGui = settings.InGui;
+        Logarithmic = settings.Logarithmic;
         if (settings.Validation != null) Validation = settings.Validation;
     }
 

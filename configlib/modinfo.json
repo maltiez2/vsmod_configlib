@@ -6,7 +6,7 @@
         "Maltiez"
     ],
     "description": "Configs library with YAML config format and in-game GUI",
-    "version": "0.5.2",
+    "version": "0.5.5",
     "dependencies": {
         "game": "1.19.4-rc.1",
         "vsimgui": "0.3.5"
