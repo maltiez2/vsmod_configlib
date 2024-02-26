@@ -1,5 +1,4 @@
-﻿using ImGuiNET;
-using System.Linq;
+﻿using System.Linq;
 using System.Text;
 using Vintagestory.API.Datastructures;
 
@@ -65,16 +64,16 @@ internal sealed class Separator : IFormattingBlock
     {
         if (mTitle != null)
         {
-            ImGui.SeparatorText(mTitle);
+            ImGuiNET.ImGui.SeparatorText(mTitle);
         }
         else
         {
-            ImGui.Separator();
+            ImGuiNET.ImGui.Separator();
         }
 
         if (mText != null)
         {
-            ImGui.TextWrapped(mText);
+            ImGuiNET.ImGui.TextWrapped(mText);
         }
     }
 

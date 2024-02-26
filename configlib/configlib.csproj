@@ -37,8 +37,11 @@
   <!-- Paths -->
   <PropertyGroup>
     <ProjectDir>$(MSBuildProjectDirectory)</ProjectDir>
-    <OutputPath>bin\$(Configuration)\Mods\mod</OutputPath>
-    <ImGuiSubmoduleOutput>$(ProjectDir)\..\VintageStory_ImGui\VSImGui\bin\$(Configuration)\Mods\mod</ImGuiSubmoduleOutput>
+    <OutputDir>bin\$(Configuration)\Mods</OutputDir>
+    <OutputPath>$(OutputDir)\$(ModId)</OutputPath>
+    <SubmodulesDir>$(ProjectDir)\..</SubmodulesDir>
+    <ImGuiSubmodule>$(SubmodulesDir)\VintageStory_ImGui\VSImGui</ImGuiSubmodule>
+    <ImGuiSubmoduleOutput>$(ImGuiSubmodule)\bin\$(Configuration)\Mods\vsimgui</ImGuiSubmoduleOutput>
     <GameDirectory>$(VINTAGE_STORY)</GameDirectory>
     <ModIconFile>$(ProjectDir)\resources\modicon.png</ModIconFile>
     <ReleasesDir>$(ProjectDir)\Releases</ReleasesDir>
@@ -46,18 +49,15 @@
     <ReleasePath>$(ReleasesDir)\$(ReleaseFile)</ReleasePath>
   </PropertyGroup>
 
-  <!-- ILRepack nugget package ref; Is used to merge multiple dlls into one to avoid conflicts -->
-  <ItemGroup>
-    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-
-  <!-- Builds dependency projects and copies theirs ddls into output directory -->
-  <ItemGroup>
-    <ProjectReference Include="$(ProjectDir)\..\VintageStory_ImGui\VSImGui\VSImGui.csproj" />
-  </ItemGroup>
+  <!-- Startup settings -->
+  <PropertyGroup>
+    <DataFolderName>VintagestoryDataDev</DataFolderName>
+    <AppDataDir>C:\Users\user\AppData\Roaming</AppDataDir>
+    <DataFolder>$(AppDataDir)\$(DataFolderName)</DataFolder>
+    <AditionalModsFolder>$(AppDataDir)\$(DataFolderName)\Mods</AditionalModsFolder>
+    <WorldName>test_$(ModId)</WorldName>
+    <ModDir>$(ProjectDir)\$(OutputDir)</ModDir>
+  </PropertyGroup>
 
   <!-- References to libraries that are being used in project -->
   <ItemGroup>
@@ -72,15 +72,13 @@
       <Private>False</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
-    <!-- Additional dependencies -->
+    <!-- Additional dependencies: will be merged into main dll by ILRepack -->
     <Reference Include="SimpleExpressionEngine">
       <HintPath>..\libs\SimpleExpressionEngine.dll</HintPath>
-      <Private>False</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <Reference Include="YamlDotNet">
       <HintPath>..\libs\YamlDotNet.dll</HintPath>
-      <Private>False</Private>
     </Reference>
     <!-- Vintage Story dependencies: wont be copied into output directory -->
     <Reference Include="OpenTK.Compute">
@@ -138,6 +136,14 @@
     </Reference>
   </ItemGroup>
 
+  <!-- ILRepack nugget package ref; Is used to merge multiple dlls into one to avoid conflicts -->
+  <ItemGroup>
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.26">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
   <!-- Creates/updates modinfo.json file in build directory -->
   <Target Name="ModInfo" AfterTargets="ILRepack">
     <PropertyGroup>
@@ -170,7 +176,6 @@
     <ItemGroup Condition="Exists('$(ModIconFile)')">
       <ModIcon Include="$(ModIconFile)" />
     </ItemGroup>
-    <Message Text="Copying @(ModIcon) to output" Importance="high" />
     <Copy SourceFiles="@(ModIcon)" DestinationFolder="$(OutputPath)" Condition="Exists('$(ModIconFile)')"/>
   </Target>
 
@@ -181,5 +186,4 @@
     <Delete Files="$(ReleasePath)" />
     <ZipDirectory SourceDirectory="$(OutputPath)" DestinationFile="$(ReleasePath)" />
   </Target>
-
 </Project>
