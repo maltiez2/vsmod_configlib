@@ -147,7 +147,7 @@
   </ItemGroup>
   
   <!-- Creates/updates modinfo.json file in build directory -->
-  <Target Name="ModInfo" AfterTargets="ILRepack">
+  <Target Name="ModInfo" AfterTargets="CleanReferenceCopyLocalPaths">
     <PropertyGroup>
       <ModInfo>
 {
