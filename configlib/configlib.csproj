@@ -2,8 +2,8 @@
   <!-- Mod info -->
   <PropertyGroup>
     <ModName>Config lib</ModName>
-    <GameVersion>1.19.4-rc.2</GameVersion>
-    <Version>1.0.0-pre.1</Version>
+    <GameVersion>1.19.4</GameVersion>
+    <Version>1.0.1</Version>
     <ModId>configlib</ModId>
     <Description>Configs library with YAML config format and in-game GUI</Description>
     <Side>Universal</Side>
@@ -22,7 +22,7 @@
       <Version>$(GameVersion)</Version>
     </Dependencies>
     <Dependencies Include="vsimgui">
-      <Version>1.0.0-pre.1</Version>
+      <Version>1.1.0</Version>
     </Dependencies>
   </ItemGroup>
 
@@ -31,7 +31,6 @@
     <TargetFramework>net7.0</TargetFramework>
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- Paths -->
@@ -175,14 +174,9 @@
 
   <!-- Copies modicon if it exists into output directory -->
   <Target Name="CopyFilesToOutput" AfterTargets="ModInfo">
-    <ItemGroup>
-      <ImGuiPacked Include="$(ImGuiReleasesFolder)/*.zip" />
-    </ItemGroup>
     <ItemGroup Condition="Exists('$(ModIconFile)')">
       <ModIcon Include="$(ModIconFile)" />
     </ItemGroup>
-    <!-- Puts imgui archive into Mods folder to load as dependency on statup -->
-    <Copy SourceFiles="@(ImGuiPacked)" DestinationFolder="$(OutputDir)" />
     <!-- Puts modicon to output folder -->
     <Copy SourceFiles="@(ModIcon)" DestinationFolder="$(OutputPath)" Condition="Exists('$(ModIconFile)')" />
   </Target>
