@@ -1,7 +1,7 @@
-﻿using ModdingTools;
-using System;
+﻿using System;
 using Vintagestory.API.Client;
-using VSImGui.src.ImGui;
+using VSImGui;
+using VSImGui.API;
 
 namespace ConfigLib
 {
@@ -12,39 +12,61 @@ namespace ConfigLib
         private bool mDisposed;
         private bool mShowConfig = false;
         private static GuiManager? mInstance;
+        private ImGuiModSystem mModSystem;
 
         public GuiManager(ICoreClientAPI api)
         {
             api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
             api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
-
+            mModSystem = api.ModLoader.GetModSystem<ImGuiModSystem>();
+            mModSystem.Draw += Draw;
+            mModSystem.Closed += CloseConfigWindow;
             mConfigWindow = new(api);
             mInstance = this;
         }
 
-        public VSDialogStatus Draw(float deltaSeconds)
+        public CallbackGUIStatus Draw(float deltaSeconds)
         {
-            if (!mShowConfig) return VSDialogStatus.Closed;
-            
+            if (!mShowConfig) return CallbackGUIStatus.Closed;
+
             if (!mConfigWindow.Draw())
             {
                 mShowConfig = false;
-                return VSDialogStatus.Closed;
+                return CallbackGUIStatus.Closed;
             }
 
-            return VSDialogStatus.GrabMouse;
+            return CallbackGUIStatus.GrabMouse;
         }
 
-        public void ShowConfigWindow()
+        public bool ToggleConfigWindow()
         {
-            mShowConfig = !mShowConfig;
+            if (!mShowConfig)
+            {
+                OpenConfigWindow();
+            }
+            else
+            {
+                CloseConfigWindow();
+            }
+
+            return true;
         }
 
         public static bool ShowConfigWindowStatic()
         {
-            mInstance?.ShowConfigWindow();
+            mInstance?.ToggleConfigWindow();
 
             return true;
+        }
+
+        public void OpenConfigWindow()
+        {
+            mShowConfig = true;
+            mModSystem.Show();
+        }
+        public void CloseConfigWindow()
+        {
+            mShowConfig = false;
         }
 
         private bool ShowConfigWindow(KeyCombination keyCombination)
@@ -60,7 +82,8 @@ namespace ConfigLib
             {
                 if (disposing)
                 {
-                    // Nothing to dispose
+                    mModSystem.Draw -= Draw;
+                    mModSystem.Closed -= CloseConfigWindow;
                 }
 
                 mDisposed = true;

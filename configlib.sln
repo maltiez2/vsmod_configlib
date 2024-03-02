@@ -11,6 +11,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ImGuiController_OpenTK", "V
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleExpressionEngine", "SimpleExpressionEngine\SimpleExpressionEngine\SimpleExpressionEngine.csproj", "{7261F4B6-AF1B-4374-974F-C19905FE308E}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VSImGui_DebugTools", "VintageStory_ImGui\VSImGui_DebugTools\VSImGui_DebugTools.csproj", "{082218E2-591B-4816-87A5-FF923012CB7F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,10 @@ Global
 		{7261F4B6-AF1B-4374-974F-C19905FE308E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7261F4B6-AF1B-4374-974F-C19905FE308E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7261F4B6-AF1B-4374-974F-C19905FE308E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{082218E2-591B-4816-87A5-FF923012CB7F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{082218E2-591B-4816-87A5-FF923012CB7F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{082218E2-591B-4816-87A5-FF923012CB7F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{082218E2-591B-4816-87A5-FF923012CB7F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

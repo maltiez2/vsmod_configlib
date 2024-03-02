@@ -10,7 +10,6 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Util;
 using Vintagestory.Common;
-using VSImGui;
 
 namespace ConfigLib;
 
@@ -77,7 +76,6 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         mCustomConfigs.Clear();
         if (mApi?.Side == EnumAppSide.Client && mGuiManager != null)
         {
-            mApi.ModLoader.GetModSystem<ImGuiModSystem>().Draw += mGuiManager.Draw;
             mGuiManager.Dispose();
         }
 
@@ -99,14 +97,20 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
 
         if (mApi is ICoreClientAPI clientApi)
         {
-            mGuiManager = new(clientApi);
-            clientApi.ModLoader.GetModSystem<ImGuiModSystem>().Draw += mGuiManager.Draw;
+            try
+            {
+                mGuiManager = new(clientApi);
+            }
+            catch (Exception exception)
+            {
+                clientApi.Logger.Error($"[Config lib] Error on creating GUI manager. Probably missing ImGui or it has incorrect version.\nException:\n{exception}");
+            }
         }
     }
     private void LoadConfigs()
     {
         if (mApi == null) return;
-        
+
         ConfigRegistry? registry = GetRegistry(mApi);
 
         foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "configlib-patches.json"))
