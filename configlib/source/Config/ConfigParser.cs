@@ -1,8 +1,4 @@
 ﻿using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
@@ -11,52 +7,54 @@ namespace ConfigLib;
 
 internal class ConfigParser
 {
-    private readonly Dictionary<string, ConfigSetting> mSettings;
-    private readonly SortedDictionary<float, string> mYaml;
-    private readonly ConfigSettingType mSettingType;
-    private readonly ICoreAPI mApi;
-    private const float cDelta = 1E-10f;
-    private float mIncrement = cDelta;
-
     public ConfigParser(ICoreAPI api, Dictionary<string, ConfigSetting> settings, JsonObject definition, SortedDictionary<float, string> yaml)
     {
-        mSettings = settings;
-        mApi = api;
-        mYaml = yaml;
+        _settings = settings;
+        _api = api;
+        _yaml = yaml;
         int version = definition["version"]?.AsInt(0) ?? 0;
 
-        mYaml.Add(-1, $"version: {version}");
+        _yaml.Add(-1, $"version: {version}");
 
         if (definition["settings"].KeyExists("boolean"))
         {
-            mSettingType = ConfigSettingType.Boolean;
+            _settingType = ConfigSettingType.Boolean;
             ParseCategory(definition["settings"]["boolean"]);
         }
 
         if (definition["settings"].KeyExists("integer"))
         {
-            mSettingType = ConfigSettingType.Integer;
+            _settingType = ConfigSettingType.Integer;
             ParseCategory(definition["settings"]["integer"]);
         }
 
         if (definition["settings"].KeyExists("float"))
         {
-            mSettingType = ConfigSettingType.Float;
+            _settingType = ConfigSettingType.Float;
             ParseCategory(definition["settings"]["float"]);
         }
 
         if (definition["settings"].KeyExists("number")) // @TODO remove
         {
-            mSettingType = ConfigSettingType.Float;
+            _settingType = ConfigSettingType.Float;
             ParseCategory(definition["settings"]["number"]);
         }
 
         if (definition["settings"].KeyExists("other"))
         {
-            mSettingType = ConfigSettingType.Other;
+            _settingType = ConfigSettingType.Other;
             ParseCategory(definition["settings"]["other"]);
         }
     }
+
+
+    private readonly Dictionary<string, ConfigSetting> _settings;
+    private readonly SortedDictionary<float, string> _yaml;
+    private readonly ConfigSettingType _settingType;
+    private readonly ICoreAPI _api;
+    private const float _delta = 1E-10f;
+    private float _increment = _delta;
+
     private void ParseCategory(JsonObject category)
     {
         foreach (JToken item in category.Token)
@@ -68,7 +66,7 @@ internal class ConfigParser
     {
         if (item is not JProperty property)
         {
-            mApi.Logger.Error($"[Config lib] Error on parsing patches. Token '{item}' is not a property.");
+            _api.Logger.Error($"[Config lib] Error on parsing patches. Token '{item}' is not a property.");
             return;
         }
 
@@ -76,19 +74,19 @@ internal class ConfigParser
 
         string yamlToken = SerializeToken(token);
         float weight = setting.SortingWeight < 0 ? 0 : setting.SortingWeight;
-        if (mYaml.ContainsKey(weight))
+        if (_yaml.ContainsKey(weight))
         {
-            weight += mIncrement;
-            mIncrement += cDelta;
+            weight += _increment;
+            _increment += _delta;
         }
-        mYaml.Add(weight, AddComments(yamlToken, property));
+        _yaml.Add(weight, AddComments(yamlToken, property));
     }
 
     #region Comments parsing
     private static string AddComments(string yamlToken, JProperty property)
     {
         (string first, string other) = SplitToken(yamlToken);
-        string comment = GetPreComment(property.Value).Replace("\n","");
+        string comment = GetPreComment(property.Value).Replace("\n", "");
         if (comment != "") comment += "\n";
         string inline = GetInlineComment(property.Value);
         if (inline != "") inline = $" # {inline}";
@@ -161,64 +159,50 @@ internal class ConfigParser
     }
     private static string ParseRangeComment(JToken item)
     {
-        if (
-            item is JObject itemObject &&
-            itemObject.ContainsKey("range") &&
-            itemObject["range"] is JObject range
-        )
+        if (item is not JObject itemObject || !itemObject.ContainsKey("range") || itemObject["range"] is not JObject) return "";
+
+        JsonObject? rangeObject = new JsonObject(item)["range"];
+
+        float? min = rangeObject?.KeyExists("min") == true ? rangeObject["min"]?.AsFloat() : null;
+        float? max = rangeObject?.KeyExists("max") == true ? rangeObject["max"]?.AsFloat() : null;
+        float? step = rangeObject?.KeyExists("step") == true ? rangeObject["step"]?.AsFloat() : null;
+
+        string minMax = (min != null, max != null) switch
         {
-            JsonObject? rangeObject = new JsonObject(item)["range"];
-            
-            float? min = rangeObject?.KeyExists("min") == true ? rangeObject["min"]?.AsFloat() : null;
-            float? max = rangeObject?.KeyExists("max") == true ? rangeObject["max"]?.AsFloat() : null;
-            float? step = rangeObject?.KeyExists("step") == true ? rangeObject["step"]?.AsFloat() : null;
+            (true, true) => $"from {min} to {max}",
+            (true, false) => $"greater than {min}",
+            (false, true) => $"less than {max}",
+            _ => ""
+        };
 
-            string minMax = (min != null, max != null) switch
-            {
-                (true, true) => $"from {min} to {max}",
-                (true, false) => $"greater than {min}",
-                (false, true) => $"less than {max}",
-                _ => ""
-            };
-
-            if (step != null && minMax != "")
-            {
-                return $"{minMax} with step of {step}";
-            }
-            else
-            {
-                return minMax;
-            }
+        if (step != null && minMax != "")
+        {
+            return $"{minMax} with step of {step}";
         }
-
-        return "";
+        else
+        {
+            return minMax;
+        }
     }
     private static string ParseValuesComment(JToken item)
     {
-        if (
-            item is JObject itemObject &&
-            itemObject.ContainsKey("values") &&
-            itemObject["values"] is JArray values
-        )
-        {
-            StringBuilder result = new();
-            result.Append("value from: ");
-            bool first = true;
-            foreach (JToken element in values)
-            {
-                if (!first) result.Append(", ");
-                if (first) first = false;
-                result.Append((element as JValue)?.Value);
-            }
-            return result.ToString();
-        }
+        if (item is not JObject itemObject || !itemObject.ContainsKey("values") || itemObject["values"] is not JArray values) return "";
 
-        return "";
+        StringBuilder result = new();
+        result.Append("value from: ");
+        bool first = true;
+        foreach (JToken element in values)
+        {
+            if (!first) result.Append(", ");
+            if (first) first = false;
+            result.Append((element as JValue)?.Value);
+        }
+        return result.ToString();
     }
     #endregion
 
     #region Token serialization
-    private string SerializeToken(JProperty token)
+    private static string SerializeToken(JProperty token)
     {
         JObject tokenObject = new()
         {
@@ -250,10 +234,17 @@ internal class ConfigParser
         string name = (string)((property.Value["name"] as JValue)?.Value ?? "");
         string? comment = (string?)(property.Value["comment"] as JValue)?.Value;
         string inGuiName = (string)((property.Value["ingui"] as JValue)?.Value ?? "");
+        bool clientSide = (bool)((property.Value["clientSide"] as JValue)?.Value ?? false);
 
         if (property.Value is not JObject propertyValue) throw new InvalidConfigException("Invalid config formatting");
 
         (JToken value, ConfigSetting setting) = GetValue(code, name, comment, propertyValue, inGuiName);
+        
+        setting.ClientSide = clientSide;
+        setting.YamlCode = name;
+        setting.Comment = comment;
+        setting.InGui = inGuiName;
+
         JProperty result = new(name, value);
         return (result, setting);
     }
@@ -280,8 +271,8 @@ internal class ConfigParser
             return GetValuesValue(code, name, comment, defaultValue, values, property, inGuiName);
         }
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, null, null, GetWeight(property), inGuiName);
-        mSettings.Add(code, setting);
+        ConfigSetting setting = new(name, new(defaultValue), _settingType, comment, null, null, GetWeight(property), inGuiName);
+        _settings.Add(code, setting);
         return (defaultValue, setting);
     }
     private (JToken, ConfigSetting) GetMappingValue(string code, string name, string? comment, JToken defaultValue, JObject mapping, JObject property, string inGuiName)
@@ -315,8 +306,8 @@ internal class ConfigParser
             settingMapping.Add(key, new(mappingValue));
         }
 
-        ConfigSetting setting = new(name, new(validatedValue), mSettingType, comment, new(settingMapping), value, GetWeight(property), inGuiName);
-        mSettings.Add(code, setting);
+        ConfigSetting setting = new(name, new(validatedValue), _settingType, comment, new(settingMapping), value, GetWeight(property), inGuiName);
+        _settings.Add(code, setting);
         return (new JValue(value), setting);
     }
     private (JToken, ConfigSetting) GetRangeValue(string code, string name, string? comment, JToken defaultValue, JObject range, JObject property, string inGuiName)
@@ -328,8 +319,8 @@ internal class ConfigParser
         bool logarithmic = property.ContainsKey("logarithmic") && new JsonObject(property["logarithmic"]).AsBool(false);
         Validation parsedValidation = new(min, max, step);
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, parsedValidation, null, GetWeight(property), inGuiName, logarithmic);
-        mSettings.Add(code, setting);
+        ConfigSetting setting = new(name, new(defaultValue), _settingType, comment, parsedValidation, null, GetWeight(property), inGuiName, logarithmic);
+        _settings.Add(code, setting);
         return (defaultValue, setting);
     }
     private (JToken, ConfigSetting) GetValuesValue(string code, string name, string? comment, JToken defaultValue, JArray values, JObject property, string inGuiName)
@@ -340,11 +331,11 @@ internal class ConfigParser
             parsedValues.Add(new(value));
         }
 
-        ConfigSetting setting = new(name, new(defaultValue), mSettingType, comment, new(parsedValues), null, GetWeight(property), inGuiName);
-        mSettings.Add(code, setting);
+        ConfigSetting setting = new(name, new(defaultValue), _settingType, comment, new(parsedValues), null, GetWeight(property), inGuiName);
+        _settings.Add(code, setting);
         return (defaultValue, setting);
     }
-    private float GetWeight(JObject property)
+    private static float GetWeight(JObject property)
     {
         if (property.ContainsKey("weight") && property["weight"] is JValue weight && (weight.Type == JTokenType.Float || weight.Type == JTokenType.Integer))
         {

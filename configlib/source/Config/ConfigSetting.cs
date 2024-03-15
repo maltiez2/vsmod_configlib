@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json.Linq;
 using ProtoBuf;
-using System.Collections.Generic;
 using Vintagestory.API.Datastructures;
 
 namespace ConfigLib;
@@ -8,17 +7,18 @@ namespace ConfigLib;
 public class ConfigSetting : ISetting
 {
     public JsonObject Value { get; set; }
-    public JsonObject DefaultValue { get; private set; }
-    public ConfigSettingType SettingType { get; private set; }
-    public string YamlCode { get; private set; }
-    public string? MappingKey { get; set; }
-    public string? Comment { get; set; }
-    public Validation? Validation { get; private set; }
-    public float SortingWeight { get; private set; }
-    public string InGui { get; private set; }
-    public bool Logarithmic { get; private set; }
+    public JsonObject DefaultValue { get; internal set; }
+    public ConfigSettingType SettingType { get; internal set; }
+    public string YamlCode { get; internal set; }
+    public string? MappingKey { get; internal set; }
+    public string? Comment { get; internal set; }
+    public Validation? Validation { get; internal set; }
+    public float SortingWeight { get; internal set; }
+    public string InGui { get; internal set; }
+    public bool Logarithmic { get; internal set; }
+    public bool ClientSide { get; internal set; }
 
-    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType, string? comment = null, Validation? validation = null, string? mappingKey = null, float sortingWeight = 0, string inGui = "", bool logarithmic = false)
+    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType, string? comment = null, Validation? validation = null, string? mappingKey = null, float sortingWeight = 0, string inGui = "", bool logarithmic = false, bool clientSide = false)
     {
         Value = defaultValue;
         DefaultValue = defaultValue;
@@ -30,6 +30,7 @@ public class ConfigSetting : ISetting
         SortingWeight = sortingWeight;
         InGui = inGui;
         Logarithmic = logarithmic;
+        ClientSide = clientSide;
     }
     public ConfigSetting(ConfigSettingPacket settings)
     {
@@ -39,13 +40,14 @@ public class ConfigSetting : ISetting
         YamlCode = settings.YamlCode;
         MappingKey = settings.MappingKey;
         Comment = settings.Comment;
-        SortingWeight= settings.SortingWeight;
+        SortingWeight = settings.SortingWeight;
         InGui = settings.InGui;
         Logarithmic = settings.Logarithmic;
+        ClientSide = settings.ClientSide;
         if (settings.Validation != null) Validation = settings.Validation;
     }
 
-    public static implicit operator ConfigSettingPacket(ConfigSetting setting) => new (setting);
+    public static implicit operator ConfigSettingPacket(ConfigSetting setting) => new(setting);
 
     static private JToken Unwrap(JObject token)
     {
@@ -67,6 +69,7 @@ public class ConfigSettingPacket
     public float SortingWeight { get; private set; } = 0;
     public string InGui { get; private set; } = "";
     public bool Logarithmic { get; private set; }
+    public bool ClientSide { get; private set; }
 
     public ConfigSettingPacket() { }
     public ConfigSettingPacket(ConfigSetting settings)
@@ -80,6 +83,7 @@ public class ConfigSettingPacket
         SortingWeight = settings.SortingWeight;
         InGui = settings.InGui;
         Logarithmic = settings.Logarithmic;
+        ClientSide = settings.ClientSide;
         if (settings.Validation != null) Validation = settings.Validation;
     }
 
@@ -112,7 +116,7 @@ public class Validation
         Maximum = max;
         Step = step;
     }
-    public Validation(ValidationPacket validation)
+    internal Validation(ValidationPacket validation)
     {
         Minimum = validation.Minimum != null ? new(Unwrap(JObject.Parse(validation.Minimum))) : null;
         Maximum = validation.Maximum != null ? new(Unwrap(JObject.Parse(validation.Maximum))) : null;
@@ -128,7 +132,7 @@ public class Validation
         if (mapping == null) return null;
 
         Dictionary<string, JsonObject> output = new();
-        foreach ((var key, var value) in mapping)
+        foreach ((string? key, string? value) in mapping)
         {
             output.Add(key, new(Unwrap(JObject.Parse(value))));
         }
@@ -139,7 +143,7 @@ public class Validation
         if (values == null) return null;
 
         List<JsonObject> output = new();
-        foreach (var value in values)
+        foreach (string value in values)
         {
             output.Add(new(Unwrap(JObject.Parse(value))));
         }
@@ -178,7 +182,7 @@ public class ValidationPacket
         if (mapping == null) return null;
 
         Dictionary<string, string> output = new();
-        foreach ((var key, var value) in mapping)
+        foreach ((string? key, JsonObject? value) in mapping)
         {
             output.Add(key, Wrap(value.Token).ToString());
         }
@@ -189,7 +193,7 @@ public class ValidationPacket
         if (values == null) return null;
 
         List<string> output = new();
-        foreach (var value in values)
+        foreach (JsonObject value in values)
         {
             output.Add(Wrap(value.Token).ToString());
         }

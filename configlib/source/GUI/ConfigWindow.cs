@@ -88,6 +88,8 @@ internal class ConfigWindow
         bool opened = true;
         mControlButtons.Reset();
 
+        UpdateCustomMods();
+
         using (new StyleApplier(mStyle))
         {
             ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
@@ -144,6 +146,14 @@ internal class ConfigWindow
         }
 
         SetUnsavedChanges();
+    }
+
+    private void UpdateCustomMods()
+    {
+        foreach (string mod in mCustom.Keys)
+        {
+            if (!mMods.Contains(mod)) mMods.Add(mod);
+        }
     }
 
     private void DrawConfigList()
@@ -284,23 +294,16 @@ internal class ConfigWindow
 
         if (mDomains.Contains(domain))
         {
-            if (mApi.IsSinglePlayer)
+            Config? config = mConfigsSystem.GetConfigImpl(domain);
+            if (config != null)
             {
-                Config? config = mConfigsSystem.GetConfigImpl(domain);
-                if (config != null)
-                {
-                    ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world");
-                    ImGui.Separator();
-                    DrawModConfig(config);
-                }
-                else
-                {
-                    ImGui.Text("\nConfig is unavailable\n");
-                }
+                ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world");
+                ImGui.Separator();
+                DrawModConfig(config);
             }
             else
             {
-                ImGui.Text("Settings unavailable in multiplayer");
+                ImGui.Text("\nConfig is unavailable\n");
             }
         }
 
@@ -324,6 +327,11 @@ internal class ConfigWindow
 
     private void DrawSetting(ConfigSetting setting)
     {
+        if (!mApi.IsSinglePlayer && !setting.ClientSide)
+        {
+            ImGui.BeginDisabled();
+        }
+        
         ImGui.PushItemWidth(300);
 
         string name = setting.InGui == "" ? setting.YamlCode : setting.InGui;
@@ -355,6 +363,8 @@ internal class ConfigWindow
 
         DrawHint(setting);
         ImGui.PopItemWidth();
+
+        if (!mApi.IsSinglePlayer && !setting.ClientSide) ImGui.EndDisabled();
     }
 
     private void DrawHint(ConfigSetting setting)
