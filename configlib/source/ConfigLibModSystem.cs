@@ -1,9 +1,5 @@
 ﻿using ConfigLib.Patches;
 using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -29,7 +25,17 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     public event Action? ConfigsLoaded;
 
     internal HashSet<string> GetDomains() => mDomains;
-    internal Config? GetConfigImpl(string domain) => mConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
+    internal Config? GetConfigImpl(string domain)
+    {
+        if (mApi is ICoreClientAPI clientApi && !clientApi.IsSinglePlayer)
+        {
+            return mServerConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
+        }
+        else
+        {
+            return mConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
+        }
+    }
     internal Config? GetServerConfigImpl(string domain) => mServerConfigs?.ContainsKey(domain) == true ? mConfigs[domain] : null;
     internal Dictionary<string, Action<string, ControlButtons>>? GetCustomConfigs() => mCustomConfigs;
 
@@ -40,11 +46,12 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     private GuiManager? mGuiManager;
     private ICoreAPI? mApi;
     private const string cRegistryCode = "configlib:configs";
+    private ConfigRegistry? mRegistry;
 
     public override void Start(ICoreAPI api)
     {
         mApi = api;
-        api.RegisterRecipeRegistry<ConfigRegistry>(cRegistryCode);
+        mRegistry = api.RegisterRecipeRegistry<ConfigRegistry>(cRegistryCode);
 
         if (api.Side == EnumAppSide.Client)
         {
@@ -90,6 +97,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         {
             mDomains.Add(domain);
             mServerConfigs[domain] = config;
+
             config.Apply();
         }
 
@@ -111,7 +119,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     {
         if (mApi == null) return;
 
-        ConfigRegistry? registry = GetRegistry(mApi);
+        ConfigRegistry? registry = mRegistry ?? GetRegistry(mApi);
 
         foreach (IAsset asset in mApi.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "configlib-patches.json"))
         {
@@ -144,16 +152,13 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     }
     private static ConfigRegistry? GetRegistry(ICoreAPI api)
     {
-        MethodInfo? getter = typeof(GameMain).GetMethod("GetRecipeRegistry", BindingFlags.Instance | BindingFlags.NonPublic);
-        return (ConfigRegistry?)getter?.Invoke(api.World, new object[] { cRegistryCode });
+        return (api.World as GameMain)?.GetRecipeRegistry(cRegistryCode) as ConfigRegistry;
     }
 }
 
 internal class ConfigRegistry : RecipeRegistryBase
 {
     public static event Action<Dictionary<string, Config>>? ConfigsLoaded;
-
-    private readonly Dictionary<string, Config> mConfigs = new();
 
     public override void FromBytes(IWorldAccessor resolver, int quantity, byte[] data)
     {
@@ -167,28 +172,29 @@ internal class ConfigRegistry : RecipeRegistryBase
             byte[] configData = reader.ReadBytes(length);
 
             SettingsPacket packet = SerializerUtil.Deserialize<SettingsPacket>(configData);
-            Config config = new(resolver.Api, packet.Domain, packet.GetSettings(), new(JObject.Parse(Asset.BytesToString(packet.Definition))));
+            Config config = new(resolver.Api, packet.Domain, new(JObject.Parse(Asset.BytesToString(packet.Definition))), packet.GetSettings());
 
-            mConfigs[domain] = config;
+            _configs[domain] = config;
         }
 
         resolver.Logger.Debug($"[Config lib] [Registry] Received config from server: {quantity}");
 
-        ConfigsLoaded?.Invoke(mConfigs);
+        ConfigsLoaded?.Invoke(_configs);
     }
     public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity)
     {
-        quantity = mConfigs.Count;
+        quantity = 0;
 
         using MemoryStream serializedConfigs = new();
         using BinaryWriter writer = new(serializedConfigs);
 
-        foreach ((string domain, Config config) in mConfigs)
+        foreach ((string domain, Config config) in _configs)
         {
             writer.Write(domain);
             byte[] configData = SerializerUtil.Serialize(new SettingsPacket(domain, config.Settings, config.Definition));
             writer.Write(configData.Length);
             writer.Write(configData);
+            quantity++;
         }
 
         resolver.Logger.Debug($"[Config lib] [Registry] Configs prepared to send to client: {quantity}");
@@ -197,6 +203,8 @@ internal class ConfigRegistry : RecipeRegistryBase
     }
     public void Register(string domain, Config config)
     {
-        mConfigs[domain] = config;
+        _configs.Add(domain, config);
     }
+
+    private readonly Dictionary<string, Config> _configs = new();
 }

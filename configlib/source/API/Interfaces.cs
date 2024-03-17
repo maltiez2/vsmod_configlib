@@ -20,11 +20,11 @@ public interface IConfigProvider
 public interface IConfig
 {
     string ConfigFilePath { get; }
-    string ConfigFileContent { get; }
+    public int Version { get; }
 
     void WriteToFile();
     bool ReadFromFile();
-    void RestoreToDefault();
+    void RestoreToDefaults();
     ISetting? GetSetting(string code);
 }
 
@@ -33,6 +33,7 @@ public enum ConfigSettingType
     Boolean,
     Float,
     Integer,
+    String,
     Other
 }
 

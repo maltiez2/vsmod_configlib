@@ -1,99 +1,97 @@
-﻿using System;
-using Vintagestory.API.Client;
+﻿using Vintagestory.API.Client;
 using VSImGui;
 using VSImGui.API;
 
-namespace ConfigLib
+namespace ConfigLib;
+
+internal class GuiManager : IDisposable
 {
-    internal class GuiManager : IDisposable
+    private readonly ImGuiModSystem _modSystem;
+    private readonly ConfigWindow _configWindow;
+    private bool _disposed;
+    private bool _showConfig = false;
+    
+    private static GuiManager? _instance;
+
+    public GuiManager(ICoreClientAPI api)
     {
-        private readonly ConfigWindow mConfigWindow;
+        api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
+        api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
+        _modSystem = api.ModLoader.GetModSystem<ImGuiModSystem>();
+        _modSystem.Draw += Draw;
+        _modSystem.Closed += CloseConfigWindow;
+        _configWindow = new(api);
+        _instance = this;
+    }
 
-        private bool mDisposed;
-        private bool mShowConfig = false;
-        private static GuiManager? mInstance;
-        private ImGuiModSystem mModSystem;
+    public CallbackGUIStatus Draw(float deltaSeconds)
+    {
+        if (!_showConfig) return CallbackGUIStatus.Closed;
 
-        public GuiManager(ICoreClientAPI api)
+        if (!_configWindow.Draw())
         {
-            api.Input.RegisterHotKey("configlibconfigs", "(Config lib) Open configs window", GlKeys.P, HotkeyType.DevTool, false, false, false);
-            api.Input.SetHotKeyHandler("configlibconfigs", ShowConfigWindow);
-            mModSystem = api.ModLoader.GetModSystem<ImGuiModSystem>();
-            mModSystem.Draw += Draw;
-            mModSystem.Closed += CloseConfigWindow;
-            mConfigWindow = new(api);
-            mInstance = this;
+            _showConfig = false;
+            return CallbackGUIStatus.Closed;
         }
 
-        public CallbackGUIStatus Draw(float deltaSeconds)
-        {
-            if (!mShowConfig) return CallbackGUIStatus.Closed;
+        return CallbackGUIStatus.GrabMouse;
+    }
 
-            if (!mConfigWindow.Draw())
+    public bool ToggleConfigWindow()
+    {
+        if (!_showConfig)
+        {
+            OpenConfigWindow();
+        }
+        else
+        {
+            CloseConfigWindow();
+        }
+
+        return true;
+    }
+
+    public static bool ShowConfigWindowStatic()
+    {
+        _instance?.ToggleConfigWindow();
+
+        return true;
+    }
+
+    public void OpenConfigWindow()
+    {
+        _showConfig = true;
+        _modSystem.Show();
+    }
+    public void CloseConfigWindow()
+    {
+        _showConfig = false;
+    }
+
+    private bool ShowConfigWindow(KeyCombination keyCombination)
+    {
+        _showConfig = !_showConfig;
+
+        return true;
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
             {
-                mShowConfig = false;
-                return CallbackGUIStatus.Closed;
+                _modSystem.Draw -= Draw;
+                _modSystem.Closed -= CloseConfigWindow;
             }
 
-            return CallbackGUIStatus.GrabMouse;
+            _disposed = true;
         }
+    }
 
-        public bool ToggleConfigWindow()
-        {
-            if (!mShowConfig)
-            {
-                OpenConfigWindow();
-            }
-            else
-            {
-                CloseConfigWindow();
-            }
-
-            return true;
-        }
-
-        public static bool ShowConfigWindowStatic()
-        {
-            mInstance?.ToggleConfigWindow();
-
-            return true;
-        }
-
-        public void OpenConfigWindow()
-        {
-            mShowConfig = true;
-            mModSystem.Show();
-        }
-        public void CloseConfigWindow()
-        {
-            mShowConfig = false;
-        }
-
-        private bool ShowConfigWindow(KeyCombination keyCombination)
-        {
-            mShowConfig = !mShowConfig;
-
-            return true;
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!mDisposed)
-            {
-                if (disposing)
-                {
-                    mModSystem.Draw -= Draw;
-                    mModSystem.Closed -= CloseConfigWindow;
-                }
-
-                mDisposed = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }

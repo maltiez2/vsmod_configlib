@@ -10,103 +10,61 @@ namespace ConfigLib;
 
 public class Config : IConfig
 {
-    public Dictionary<string, ConfigSetting> Settings => _settings;
     public string ConfigFilePath { get; private set; }
-    public string ConfigFileContent => _yamlConfig;
-    public JsonObject Definition => _definition;
     public int Version { get; private set; }
-    public SortedDictionary<float, IConfigBlock> ConfigBlocks => _configBlocks;
 
-    public Config(ICoreAPI api, string domain, JsonObject definition)
+    public Config(ICoreAPI api, string domain, JsonObject json)
     {
         _api = api;
         _domain = domain;
-        _definition = definition;
+        _json = json;
+
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
-        Version = definition["version"].AsInt(0);
 
         try
         {
-            SortedDictionary<float, string> yaml = new();
-            _ = new ConfigParser(_api, _settings, _definition, yaml);
-            FillConfigBlocks();
-            string constructedYaml = ConstructYaml(yaml);
-            _yamlConfig = (string)constructedYaml.Clone();
-            ReadFromFile();
-            bool validVersion = UpdateValues(DeserializeYaml(_yamlConfig), _settings);
-            if (!validVersion)
-            {
-                _api.Logger.Notification($"[Config lib] ({domain}) Not valid config file version, restoring to default values.");
-                _yamlConfig = constructedYaml;
-                UpdateValues(DeserializeYaml(_yamlConfig), _settings);
-                WriteToFile();
-            }
-            using StreamWriter outputFile = new(ConfigFilePath);
-            outputFile.Write(_yamlConfig);
-            _api.Logger.Notification($"[Config lib] ({domain}) Settings loaded: {_settings.Count}");
+            Parse(json, out _settings, out _configBlocks, out _defaultYaml);
+            _clientSideSettings = _settings;
+            _serverSideSettings = _settings;
             _patches = new(api, this);
         }
         catch (ConfigLibException exception)
         {
             _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
-            _settings = new();
-            _yamlConfig = "<failed to load>";
             _patches = new(api, this);
-            return;
+            _settings = new();
+            _configBlocks = new();
+            _defaultYaml = "";
         }
     }
-    public Config(ICoreAPI api, string domain, Dictionary<string, ConfigSetting> settings, JsonObject definition)
+    public Config(ICoreAPI api, string domain, JsonObject json, Dictionary<string, ConfigSetting> serverSideSettings)
     {
         _api = api;
         _domain = domain;
-        _settings = settings;
-        Version = -1;
+        _json = json;
+
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
-        _yamlConfig = "<not available on client in multiplayer>";
-        _definition = definition;
-        _patches = new(api, this);
-        FillConfigBlocks();
-    }
-    public Config(ICoreAPI api, string domain, JsonObject definition, Dictionary<string, ConfigSetting> settings)
-    {
-        _api = api;
-        _domain = domain;
-        _definition = definition;
-        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
-        Version = definition["version"].AsInt(0);
 
         try
         {
-            SortedDictionary<float, string> yaml = new();
-            _ = new ConfigParser(_api, _settings, _definition, yaml);
-            FillConfigBlocks();
-            string constructedYaml = ConstructYaml(yaml);
-            _yamlConfig = (string)constructedYaml.Clone();
-            ReadFromFile();
-            bool validVersion = UpdateValues(DeserializeYaml(_yamlConfig), _settings);
-            if (!validVersion)
-            {
-                _api.Logger.Notification($"[Config lib] ({domain}) Not valid config file version, restoring to default values.");
-                _yamlConfig = constructedYaml;
-                UpdateValues(DeserializeYaml(_yamlConfig), _settings);
-                WriteToFile();
-            }
-            using StreamWriter outputFile = new(ConfigFilePath);
-            outputFile.Write(_yamlConfig);
-            _api.Logger.Notification($"[Config lib] ({domain}) Settings loaded: {_settings.Count}");
-            FillServerSettingsValues(settings);
+            Parse(json, out _settings, out _configBlocks, out _defaultYaml, checkVersion: false);
+            DistributeSettingsBySides(serverSideSettings);
             _patches = new(api, this);
         }
         catch (ConfigLibException exception)
         {
             _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
-            _settings = new();
-            _yamlConfig = "<failed to load>";
             _patches = new(api, this);
-            return;
+            _settings = new();
+            _configBlocks = new();
+            _defaultYaml = "";
         }
     }
+
     internal void Apply() => _patches.Apply();
+    internal JsonObject Definition => _json;
+    internal SortedDictionary<float, IConfigBlock> ConfigBlocks => _configBlocks;
+    internal Dictionary<string, ConfigSetting> Settings => _settings;
 
     public ISetting? GetSetting(string code)
     {
@@ -117,17 +75,17 @@ public class Config : IConfig
     {
         try
         {
+            string yaml;
             if (_api is ICoreClientAPI { IsSinglePlayer: false })
             {
-                WriteValues(_clientSideSettings);
+                yaml = ToYaml(_clientSideSettings.Values);
             }
             else
             {
-                WriteValues(_settings);
+                yaml = ToYaml(_settings.Values);
             }
-                
-            using StreamWriter outputFile = new(ConfigFilePath);
-            outputFile.Write(_yamlConfig);
+
+            WriteYaml(yaml);
         }
         catch (Exception exception)
         {
@@ -137,187 +95,145 @@ public class Config : IConfig
     }
     public bool ReadFromFile()
     {
-        if (Path.Exists(ConfigFilePath))
+        try
         {
-            try
-            {
-                using StreamReader outputFile = new(ConfigFilePath);
-                _yamlConfig = outputFile.ReadToEnd();
-                return true;
-            }
-            catch
-            {
-                _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
-                using StreamWriter outputFile = new(ConfigFilePath);
-                outputFile.Write(_yamlConfig);
-            }
-        }
-        else
-        {
-            _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Creating default settings file: {ConfigFilePath}");
-            using StreamWriter outputFile = new(ConfigFilePath);
-            outputFile.Write(_yamlConfig);
-        }
+            string yaml = ReadYaml(_defaultYaml);
 
-        return false;
+            if (_api is ICoreClientAPI { IsSinglePlayer: false })
+            {
+                return FromYaml(_clientSideSettings.Values, yaml);
+            }
+            else
+            {
+                return FromYaml(_settings.Values, yaml);
+            }
+        }
+        catch (Exception exception)
+        {
+            _api.Logger.Error($"Exception when trying read YAML file and parse it for'{_domain}' config.\nException: {exception}\n");
+            return false;
+        }
     }
-    public void UpdateFromFile()
+    public void RestoreToDefaults()
     {
-        ReadFromFile();
-        JObject deserialized = DeserializeYaml(_yamlConfig);
-        if (_api is ICoreClientAPI { IsSinglePlayer: false })
+        try
         {
-            UpdateValues(deserialized, _clientSideSettings);
+            if (_api is ICoreClientAPI { IsSinglePlayer: false })
+            {
+                FromYaml(_clientSideSettings.Values, _defaultYaml);
+            }
+            else
+            {
+                FromYaml(_settings.Values, _defaultYaml);
+            }
         }
-        else
+        catch (Exception exception)
         {
-            UpdateValues(deserialized, _settings);
-        }
-        
-    }
-    public void RestoreToDefault()
-    {
-        if (_api is ICoreClientAPI { IsSinglePlayer: true })
-        {
-            _settings.Clear();
-            WriteYaml(_settings, _definition);
-        }
-        else
-        {
-            _clientSideSettings.Clear();
-            WriteYaml(_clientSideSettings, _definition);
+            _api.Logger.Error($"Exception when trying to restore settings to defaults for '{_domain}' config.\nException: {exception}\n");
         }
     }
 
 
     private readonly ICoreAPI _api;
     private readonly string _domain;
-    private readonly Dictionary<string, ConfigSetting> _settings = new();
+    private readonly Dictionary<string, ConfigSetting> _settings;
     private readonly Dictionary<string, ConfigSetting> _clientSideSettings = new();
-    private readonly SortedDictionary<float, IConfigBlock> _configBlocks = new();
-    private readonly JsonObject _definition;
+    private readonly Dictionary<string, ConfigSetting> _serverSideSettings = new();
+    private readonly SortedDictionary<float, IConfigBlock> _configBlocks;
+    private readonly JsonObject _json;
     private readonly ConfigPatches _patches;
-    private const float _delta = 1E-9f;
+    private readonly string _defaultYaml;
 
-    private float _increment = _delta;
-    private string _yamlConfig;
-
-    private void FillServerSettingsValues(Dictionary<string, ConfigSetting> settings)
+    private void DistributeSettingsBySides(Dictionary<string, ConfigSetting> serverSideSettings)
     {
         foreach ((string code, ConfigSetting setting) in _settings)
         {
             _clientSideSettings.Add(code, setting);
-        }
-        foreach ((string code, ConfigSetting setting) in settings.Where(entry => !entry.Value.ClientSide && _settings.ContainsKey(entry.Key)))
-        {
-            _settings[code] = setting;
-        }
-    }
-    private void FillClientSettingsValues(Dictionary<string, ConfigSetting> settings)
-    {
-        foreach ((string code, ConfigSetting setting) in settings.Where(entry => entry.Value.ClientSide && _settings.ContainsKey(entry.Key)))
-        {
-            _settings[code] = setting;
-        }
-    }
-    private void WriteYaml(Dictionary<string, ConfigSetting> settings, JsonObject definition)
-    {
-        SortedDictionary<float, string> yaml = new();
-        _ = new ConfigParser(_api, settings, definition, yaml);
-        FillConfigBlocks();
-        FillClientSettingsValues(_clientSideSettings);
-        _yamlConfig = ConstructYaml(yaml);
-    }
-    private string ConstructYaml(SortedDictionary<float, string> yaml)
-    {
-        foreach ((float weight, IConfigBlock block) in _configBlocks.Where(entry => entry.Value is IFormattingBlock))
-        {
-            yaml.Add(weight, (block as IFormattingBlock)?.Yaml ?? "");
-        }
 
-        return yaml.Select(entry => entry.Value).Aggregate((first, second) => $"{first}\n{second}");
-    }
-    private void FillConfigBlocks()
-    {
-        _configBlocks.Clear();
-
-        foreach ((_, ConfigSetting setting) in _settings)
-        {
-            float weight = setting.SortingWeight;
-            if (_configBlocks.ContainsKey(weight))
+            if (!setting.ClientSide && serverSideSettings.ContainsKey(code))
             {
-                weight += _increment;
-                _increment += _delta;
+                _settings[code] = serverSideSettings[code];
+                _serverSideSettings.Add(code, serverSideSettings[code]);
             }
-            _configBlocks.Add(weight, setting);
-        }
-
-        if (_definition.KeyExists("formatting") && _definition["formatting"].IsArray())
-        {
-            foreach (JsonObject block in _definition["formatting"].AsArray())
+            else
             {
-                IFormattingBlock formattingBlock = ParseBlock(block);
-                _configBlocks.Add(formattingBlock.SortingWeight, formattingBlock);
+                _serverSideSettings.Add(code, _settings[code]);
             }
         }
     }
-    private IFormattingBlock ParseBlock(JsonObject block)
+    private void Parse(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, bool checkVersion = true)
     {
-        switch (block["type"]?.AsString())
+        Version = FromJson(json, out settings, out configBlocks);
+        defaultConfig = ToYaml(settings.Values);
+        string yamlConfig = ReadYaml(defaultConfig);
+        bool valid = FromYaml(settings.Values, yamlConfig);
+        if (checkVersion && !valid)
         {
-            case "separator":
-                return new Separator(block);
+            WriteYaml(defaultConfig);
+            FromYaml(settings.Values, defaultConfig);
         }
-
-        return new Blank();
     }
-    private JsonObject ReplaceValues(Dictionary<string, ConfigSetting> currentSettings)
+
+    #region Files
+    private string ReadYaml(string defaultConfig)
     {
-        JsonObject result = _definition.Clone();
-        if (result["settings"]?.Token is not JObject settings) return result;
-        foreach ((_, JToken? category) in settings)
+        if (Path.Exists(ConfigFilePath))
         {
-            if (category is not JObject categoryValue) continue;
-
-            foreach ((string key, JToken? value) in categoryValue)
+            try
             {
-                if (currentSettings.ContainsKey(key) && value is JObject valueObject)
-                {
-                    if (currentSettings[key].MappingKey != null)
-                    {
-                        valueObject["default"]?.Replace(new JValue(currentSettings[key].MappingKey));
-                    }
-                    else
-                    {
-                        valueObject["default"]?.Replace(currentSettings[key].Value.Token);
-                    }
-
-                }
+                using StreamReader outputFile = new(ConfigFilePath);
+                return outputFile.ReadToEnd();
+            }
+            catch
+            {
+                _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
+                using StreamWriter outputFile = new(ConfigFilePath);
+                outputFile.Write(defaultConfig);
             }
         }
-        return result;
-    }
-    private bool UpdateValues(JObject values, Dictionary<string, ConfigSetting> currentSettings)
-    {
-        if (Version != -1)
+        else
         {
-            if (!values.ContainsKey("version")) return false;
-            if (GetVersion(values) != Version) return false;
+            _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Creating default settings file: {ConfigFilePath}");
+            using StreamWriter outputFile = new(ConfigFilePath);
+            outputFile.Write(defaultConfig);
         }
 
-        foreach ((_, ConfigSetting? setting) in currentSettings)
+        return defaultConfig;
+    }
+    private void WriteYaml(string yaml)
+    {
+        try
+        {
+            using StreamWriter outputFile = new(ConfigFilePath);
+            outputFile.Write(yaml);
+        }
+        catch (Exception exception)
+        {
+            _api.Logger.Error($"Exception when trying to deserialize yaml and write it to file for '{_domain}' config.\nException: {exception}\n");
+        }
+
+    }
+    #endregion
+
+    #region Serialization
+    private bool FromYaml(IEnumerable<ConfigSetting> settings, string yaml)
+    {
+        ValuesFromYaml(out Dictionary<string, JsonObject> values, yaml);
+
+        if (Version != -1 && (!values.ContainsKey("version") || ConvertVersion(values["version"].Token) != Version)) return false;
+
+        foreach (ConfigSetting setting in settings)
         {
             if (!values.ContainsKey(setting.YamlCode)) continue;
 
             if (setting.Validation?.Mapping == null)
             {
-                JToken converted = ConvertValue(values[setting.YamlCode], setting.SettingType);
+                JToken converted = ConvertValue(values[setting.YamlCode].Token, setting.SettingType);
                 setting.Value = new(converted);
                 continue;
             }
 
-            string key = (string?)(values[setting.YamlCode] as JValue)?.Value ?? "";
-
+            string key = values[setting.YamlCode].AsString("");
             if (setting.Validation?.Mapping?.ContainsKey(key) == true)
             {
                 setting.Value = setting.Validation.Mapping[key];
@@ -327,15 +243,123 @@ public class Config : IConfig
 
         return true;
     }
-    private int GetVersion(JObject values)
+    private string ToYaml(IEnumerable<ConfigSetting> settings)
     {
-        if (values == null) return -1;
-        if (!values.ContainsKey("version")) return -1;
+        return ConstructYaml(settings, _configBlocks);
+    }
+    private static int FromJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks)
+    {
+        int version = 0;
+        settings = new();
 
-        object? value = (values["version"] as JValue)?.Value;
-        if (value == null) return -1;
+        SettingsFromJson(settings, json, ref version);
 
-        return int.Parse((string)value);
+        FormattingFronJson(json, out SortedDictionary<float, IConfigBlock> formatting);
+        configBlocks = CombineConfigBlocks(formatting, settings.Values);
+
+        return version;
+    }
+
+    private static SortedDictionary<float, IConfigBlock> CombineConfigBlocks(SortedDictionary<float, IConfigBlock> formatting, IEnumerable<ConfigSetting> settings)
+    {
+        float delta = 1E-10f;
+        float increment = delta;
+
+        SortedDictionary<float, IConfigBlock> configBlocks = new();
+        foreach (ConfigSetting setting in settings)
+        {
+            float weight = setting.SortingWeight;
+            if (configBlocks.ContainsKey(weight))
+            {
+                weight += increment;
+                increment += delta;
+            }
+
+            configBlocks.Add(weight, setting);
+        }
+
+        foreach ((float sortingWeight, IConfigBlock block) in formatting)
+        {
+            float weight = sortingWeight;
+            if (configBlocks.ContainsKey(weight))
+            {
+                weight -= increment;
+                increment += delta;
+            }
+
+            configBlocks.Add(weight, block);
+        }
+
+        return configBlocks;
+    }
+    private static void FormattingFronJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting)
+    {
+        formatting = new();
+        float delta = 1E-10f;
+        float increment = delta;
+
+        foreach ((_, ConfigSetting setting) in _settings)
+        {
+            float weight = setting.SortingWeight;
+            if (formatting.ContainsKey(weight))
+            {
+                weight += _increment;
+                _increment += _delta;
+            }
+            formatting.Add(weight, setting);
+        }
+
+        if (json.KeyExists("formatting") && json["formatting"].IsArray())
+        {
+            foreach (JsonObject block in json["formatting"].AsArray())
+            {
+                IFormattingBlock formattingBlock = ParseBlock(block);
+                formatting.Add(formattingBlock.SortingWeight, formattingBlock);
+            }
+        }
+    }
+    private static IFormattingBlock ParseBlock(JsonObject block)
+    {
+        switch (block["type"]?.AsString())
+        {
+            case "separator":
+                return new Separator(block);
+        }
+
+        return new Blank();
+    }
+    private static int ConvertVersion(JToken value)
+    {
+        return new JsonObject(ConvertValue(value, ConfigSettingType.Integer)).AsInt(0);
+    }
+    private static string ConstructYaml(IEnumerable<ConfigSetting> settings, SortedDictionary<float, IConfigBlock> formatting)
+    {
+        SettingsToYaml(settings, out SortedDictionary<float, string> yaml);
+
+        foreach ((float weight, IConfigBlock block) in formatting.Where(entry => entry.Value is IFormattingBlock))
+        {
+            yaml.Add(weight, (block as IFormattingBlock)?.Yaml ?? "");
+        }
+
+        return yaml.Select(entry => entry.Value).Aggregate((first, second) => $"{first}\n{second}");
+    }
+    private static void ValuesFromYaml(out Dictionary<string, JsonObject> values, string yaml)
+    {
+        IDeserializer deserializer = new DeserializerBuilder().Build();
+        object? yamlObject = deserializer.Deserialize(yaml);
+
+        ISerializer serializer = new SerializerBuilder()
+            .JsonCompatible()
+            .Build();
+
+        JObject json = JObject.Parse(serializer.Serialize(yamlObject));
+
+        values = new();
+        foreach ((string code, JToken? value) in json)
+        {
+            if (value == null) continue;
+            values.Add(code, new(value));
+        }
     }
     private static JToken ConvertValue(JToken? value, ConfigSettingType type)
     {
@@ -355,27 +379,76 @@ public class Config : IConfig
             case ConfigSettingType.Integer:
                 int intValue = int.Parse(strValue, NumberStyles.Integer, culture);
                 return new JValue(intValue);
+            case ConfigSettingType.String:
+                return new JValue(strValue);
             default:
                 return value ?? new JValue(strValue);
         }
     }
-    private void WriteValues(Dictionary<string, ConfigSetting> currentSettings)
+    private static void SettingsToYaml(IEnumerable<ConfigSetting> settings, out SortedDictionary<float, string> yaml)
     {
-        JsonObject definition = ReplaceValues(currentSettings);
+        float delta = 1E-10f;
+        float increment = delta;
 
-        WriteYaml(new(), definition);
+        yaml = new();
+        foreach (ConfigSetting setting in settings)
+        {
+            float weight = setting.SortingWeight < 0 ? 0 : setting.SortingWeight;
+            if (yaml.ContainsKey(weight))
+            {
+                weight += increment;
+                increment += delta;
+            }
+            yaml.Add(weight, setting.ToYaml());
+        }
     }
-    static private JObject DeserializeYaml(string config)
+    private static void SettingsFromJson(Dictionary<string, ConfigSetting> settings, JsonObject definition, ref int version)
     {
-        IDeserializer deserializer = new DeserializerBuilder().Build();
-        object? yamlObject = deserializer.Deserialize(config);
+        version = definition["version"]?.AsInt(0) ?? 0;
 
-        ISerializer serializer = new SerializerBuilder()
-            .JsonCompatible()
-            .Build();
+        if (definition["settings"].KeyExists("boolean"))
+        {
+            ParseSettingsCategory(definition["settings"]["boolean"], settings, ConfigSettingType.Boolean);
+        }
 
-        string json = serializer.Serialize(yamlObject);
+        if (definition["settings"].KeyExists("integer"))
+        {
+            ParseSettingsCategory(definition["settings"]["integer"], settings, ConfigSettingType.Integer);
+        }
 
-        return JObject.Parse(json);
+        if (definition["settings"].KeyExists("float"))
+        {
+            ParseSettingsCategory(definition["settings"]["float"], settings, ConfigSettingType.Float);
+        }
+
+        if (definition["settings"].KeyExists("number"))
+        {
+            ParseSettingsCategory(definition["settings"]["number"], settings, ConfigSettingType.Float);
+        }
+
+        if (definition["settings"].KeyExists("string"))
+        {
+            ParseSettingsCategory(definition["settings"]["string"], settings, ConfigSettingType.String);
+        }
+
+        if (definition["settings"].KeyExists("other"))
+        {
+            ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other);
+        }
     }
+    private static void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType)
+    {
+        foreach (JToken item in category.Token)
+        {
+            if (item is not JProperty property)
+            {
+                continue;
+            }
+
+            string code = property.Name;
+            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType);
+            settings.Add(code, setting);
+        }
+    }
+    #endregion
 }

@@ -115,6 +115,10 @@ internal class AssetPatch
         {
             mApi.Logger.Debug($"[Config lib] Error on parsing 'const' patches for '{assetPath}'.");
         }
+        if (!ConstructStringPatches(definition, assetPath, config))
+        {
+            mApi.Logger.Debug($"[Config lib] Error on parsing 'string' patches for '{assetPath}'.");
+        }
         if (!ConstructJsonPatches(definition, assetPath, config))
         {
             mApi.Logger.Debug($"[Config lib] Error on parsing 'other' patches for '{assetPath}'.");
@@ -229,6 +233,40 @@ internal class AssetPatch
                 continue;
             }
             mPatches.Add(new BooleanPatch(key, setting, config));
+        }
+
+        return !failed;
+    }
+    private bool ConstructStringPatches(JsonObject definition, string assetPath, Config config)
+    {
+        if (!definition.KeyExists("string")) return true;
+        if (!definition["string"].KeyExists(assetPath)) return true;
+        if (definition["string"][assetPath]?.Token is not JObject stringPatches) return false;
+
+        bool failed = false;
+
+        foreach ((string key, JToken? value) in stringPatches)
+        {
+            if (value is not JValue boolValue || boolValue.Type != JTokenType.String)
+            {
+                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
+                failed = true;
+                continue;
+            }
+            string setting = (string?)boolValue.Value ?? "";
+            if (config.GetSetting(setting) == null)
+            {
+                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
+                failed = true;
+                continue;
+            }
+            if (config.GetSetting(setting)?.SettingType != ConfigSettingType.String)
+            {
+                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not from 'string' category.");
+                failed = true;
+                continue;
+            }
+            mPatches.Add(new StringPatch(key, setting, config));
         }
 
         return !failed;
@@ -351,6 +389,23 @@ internal sealed class BooleanPatch : IValuePatch
     {
         mPath = new(path);
         mValue = config.GetSetting(value)?.Value.AsBool(false) ?? false;
+    }
+
+    public void Apply(JsonObject asset)
+    {
+        JsonObject? jsonValue = mPath.Get(asset);
+        jsonValue?.Token.Replace(new JValue(mValue));
+    }
+}
+internal sealed class StringPatch : IValuePatch
+{
+    private readonly JsonObjectPath mPath;
+    private readonly string mValue;
+
+    public StringPatch(string path, string value, Config config)
+    {
+        mPath = new(path);
+        mValue = config.GetSetting(value)?.Value.AsString() ?? "";
     }
 
     public void Apply(JsonObject asset)

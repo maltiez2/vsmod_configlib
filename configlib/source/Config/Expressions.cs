@@ -31,6 +31,19 @@ internal sealed class BooleanSettingsContext : IContext<bool, bool>
     public bool Resolve(string name, params bool[] arguments) => mSettings[name];
 }
 
+internal sealed class StringSettingsContext : IContext<string, string>
+{
+    private readonly Dictionary<string, string> mSettings;
+
+    public StringSettingsContext(Dictionary<string, ConfigSetting> settings)
+    {
+        mSettings = settings.Where(entry => entry.Value.SettingType == ConfigSettingType.String).ToDictionary(entry => entry.Key, entry => entry.Value.Value.AsString());
+    }
+
+    public bool Resolvable(string name) => mSettings.ContainsKey(name);
+    public string Resolve(string name, params string[] arguments) => mSettings[name];
+}
+
 internal sealed class JsonSettingsContext : IContext<JsonObject, JsonObject>
 {
     private readonly Dictionary<string, JsonObject> mSettings;

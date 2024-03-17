@@ -1,0 +1,25 @@
+{
+  "file":  "config-filename.json",
+  "settings": {
+    "float": {
+      "setting-code": {
+        "path": "path/in/config/file/to/value",
+        "title": "domain:lang-code",
+        "weight": 0.9,
+        "comment": "Comment displayed as hint",
+        "default": 1.0,
+        "clientSide": true,
+        "range": {
+          "min": 0.5,
+          "max": 2.0
+        }
+      }
+    }
+  },
+  "formatting": [
+    {
+      "type": "separator",
+      "weight": 1.0
+    }
+  ]
+}
