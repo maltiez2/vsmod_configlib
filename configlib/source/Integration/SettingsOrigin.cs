@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using Vintagestory.API.Common;
+﻿using Vintagestory.API.Common;
 using Vintagestory.Common;
 
 namespace ConfigLib
@@ -20,7 +19,7 @@ namespace ConfigLib
 
         public void LoadAsset(IAsset asset)
         {
-            
+
         }
 
         public bool TryLoadAsset(IAsset asset)

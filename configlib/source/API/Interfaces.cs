@@ -1,6 +1,4 @@
 ﻿using ConfigLib.Formatting;
-using System;
-using System.Collections.Generic;
 using Vintagestory.API.Datastructures;
 
 namespace ConfigLib;
@@ -10,21 +8,19 @@ public interface IConfigProvider
     IEnumerable<string> Domains { get; }
     IConfig? GetConfig(string domain);
     ISetting? GetSetting(string domain, string code);
-    IConfig? GetServerConfig(string domain);
-    ISetting? GetServerSetting(string domain, string code);
     void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate);
-    
+
     event Action? ConfigsLoaded;
 }
 
 public interface IConfig
 {
     string ConfigFilePath { get; }
-    string ConfigFileContent { get; }
+    public int Version { get; }
 
     void WriteToFile();
     bool ReadFromFile();
-    void RestoreToDefault();
+    void RestoreToDefaults();
     ISetting? GetSetting(string code);
 }
 
@@ -33,6 +29,7 @@ public enum ConfigSettingType
     Boolean,
     Float,
     Integer,
+    String,
     Other
 }
 
