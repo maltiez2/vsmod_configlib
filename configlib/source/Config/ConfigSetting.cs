@@ -1,5 +1,4 @@
-﻿using HarmonyLib;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using ProtoBuf;
 using System.Text;
 using Vintagestory.API.Datastructures;
@@ -25,7 +24,7 @@ public class ConfigSetting : ISetting
     public string? Comment { get; internal set; }
     public Validation? Validation { get; internal set; }
     public float SortingWeight { get; internal set; }
-    public string InGui { get; internal set; }
+    public string? InGui { get; internal set; }
     public bool Logarithmic { get; internal set; }
     public bool ClientSide { get; internal set; }
 
@@ -66,7 +65,16 @@ public class ConfigSetting : ISetting
     #region YAML
     private string SerializeToken()
     {
-        JProperty token = new(YamlCode, Value.Token);
+        JProperty token;
+        if (MappingKey != null)
+        {
+            token = new(YamlCode, new JValue(MappingKey));
+        }
+        else
+        {
+            token = new(YamlCode, Value.Token);
+        }
+
 
         JObject tokenObject = new()
         {
@@ -185,7 +193,7 @@ public class ConfigSetting : ISetting
         if (token["value"] is not JToken value) return new JValue("<invalid>");
         return value;
     }
-    
+
     internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType)
     {
         ConfigSetting setting = new(
@@ -196,7 +204,7 @@ public class ConfigSetting : ISetting
         {
             Value = json["default"],
             Comment = json["comment"].AsString(),
-            InGui = json["ingui"].AsString(),
+            InGui = json["ingui"].AsString(json["name"].AsString()),
             ClientSide = json["clientSide"].AsBool(false),
             SortingWeight = json["weight"].AsFloat(0),
             Logarithmic = json["logarithmic"].AsBool(false)
@@ -222,7 +230,7 @@ public class ConfigSettingPacket
     public string? Comment { get; set; }
     public ValidationPacket? Validation { get; private set; }
     public float SortingWeight { get; private set; } = 0;
-    public string InGui { get; private set; } = "";
+    public string? InGui { get; private set; } = null;
     public bool Logarithmic { get; private set; }
     public bool ClientSide { get; private set; }
 

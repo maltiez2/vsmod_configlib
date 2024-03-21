@@ -138,7 +138,7 @@ internal class ConfigWindow
         foreach (string domain in mDomains)
         {
             Config? config = mConfigsSystem.GetConfigImpl(domain);
-            config?.UpdateFromFile();
+            config?.ReadFromFile();
         }
 
         SetUnsavedChanges();
@@ -178,7 +178,7 @@ internal class ConfigWindow
         if (!mDomains.Contains(domain)) return;
 
         Config? config = mConfigsSystem.GetConfigImpl(domain);
-        config?.UpdateFromFile();
+        config?.ReadFromFile();
 
         SetUnsavedChanges();
     }
@@ -330,7 +330,7 @@ internal class ConfigWindow
 
         ImGui.PushItemWidth(300);
 
-        string name = setting.InGui == "" ? setting.YamlCode : setting.InGui;
+        string name = setting.InGui ?? setting.YamlCode ?? "";
 
         if (Lang.HasTranslation(name)) name = Lang.Get(name);
 

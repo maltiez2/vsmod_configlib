@@ -8,10 +8,11 @@ using YamlDotNet.Serialization;
 
 namespace ConfigLib;
 
-public class Config : IConfig
+public sealed class Config : IConfig
 {
     public string ConfigFilePath { get; private set; }
     public int Version { get; private set; }
+    public event Action<Config>? ConfigSaved;
 
     public Config(ICoreAPI api, string domain, JsonObject json)
     {
@@ -60,11 +61,62 @@ public class Config : IConfig
             _defaultYaml = "";
         }
     }
+    public Config(ICoreAPI api, string domain, JsonObject json, string file)
+    {
+        _api = api;
+        _domain = domain;
+        _json = json;
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
+        _configType = ConfigType.JSON;
+
+        try
+        {
+            ParseJson(json, out _settings, out _configBlocks, out _defaultJson);
+            _clientSideSettings = _settings;
+            _serverSideSettings = _settings;
+            _patches = new(api, this);
+        }
+        catch (ConfigLibException exception)
+        {
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
+            _patches = new(api, this);
+            _settings = new();
+            _configBlocks = new();
+            _defaultYaml = "";
+        }
+    }
+    public Config(ICoreAPI api, string domain, JsonObject json, string file, Dictionary<string, ConfigSetting> serverSideSettings)
+    {
+        _api = api;
+        _domain = domain;
+        _json = json;
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
+        _configType = ConfigType.JSON;
+        JsonFilePath = file;
+
+        try
+        {
+            ParseJson(json, out _settings, out _configBlocks, out _defaultJson);
+            DistributeSettingsBySides(serverSideSettings);
+            _patches = new(api, this);
+        }
+        catch (ConfigLibException exception)
+        {
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
+            _patches = new(api, this);
+            _settings = new();
+            _configBlocks = new();
+            _defaultYaml = "";
+        }
+    }
 
     internal void Apply() => _patches.Apply();
     internal JsonObject Definition => _json;
     internal SortedDictionary<float, IConfigBlock> ConfigBlocks => _configBlocks;
     internal Dictionary<string, ConfigSetting> Settings => _settings;
+    internal ConfigType FileType => _configType;
+    internal string JsonFilePath { get; } = "";
+    internal string Domain => _domain;
 
     public ISetting? GetSetting(string code)
     {
@@ -75,17 +127,34 @@ public class Config : IConfig
     {
         try
         {
-            string yaml;
-            if (_api is ICoreClientAPI { IsSinglePlayer: false })
+            string content = "";
+
+            switch (_configType)
             {
-                yaml = ToYaml(_clientSideSettings.Values);
-            }
-            else
-            {
-                yaml = ToYaml(_settings.Values);
+                case ConfigType.YAML:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        content = ToYaml(_clientSideSettings.Values);
+                    }
+                    else
+                    {
+                        content = ToYaml(_settings.Values);
+                    }
+                    break;
+                case ConfigType.JSON:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        content = ToJson(_settings.Values, ReadConfigFile(_defaultJson), onlyClientSide: true);
+                    }
+                    else
+                    {
+                        content = ToJson(_settings.Values, ReadConfigFile(_defaultJson));
+                    }
+                    break;
             }
 
-            WriteYaml(yaml);
+            WriteConfigFile(content);
+            ConfigSaved?.Invoke(this);
         }
         catch (Exception exception)
         {
@@ -97,16 +166,31 @@ public class Config : IConfig
     {
         try
         {
-            string yaml = ReadYaml(_defaultYaml);
+            string content = ReadConfigFile(_defaultYaml);
 
-            if (_api is ICoreClientAPI { IsSinglePlayer: false })
+            switch (_configType)
             {
-                return FromYaml(_clientSideSettings.Values, yaml);
+                case ConfigType.YAML:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        return FromYaml(_clientSideSettings.Values, content);
+                    }
+                    else
+                    {
+                        return FromYaml(_settings.Values, content);
+                    }
+                case ConfigType.JSON:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        return FromJson(_settings.Values, content, onlyClientSide: true);
+                    }
+                    else
+                    {
+                        return FromJson(_settings.Values, content);
+                    }
             }
-            else
-            {
-                return FromYaml(_settings.Values, yaml);
-            }
+
+            return false;
         }
         catch (Exception exception)
         {
@@ -118,13 +202,28 @@ public class Config : IConfig
     {
         try
         {
-            if (_api is ICoreClientAPI { IsSinglePlayer: false })
+            switch (_configType)
             {
-                FromYaml(_clientSideSettings.Values, _defaultYaml);
-            }
-            else
-            {
-                FromYaml(_settings.Values, _defaultYaml);
+                case ConfigType.YAML:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        FromYaml(_clientSideSettings.Values, _defaultYaml);
+                    }
+                    else
+                    {
+                        FromYaml(_settings.Values, _defaultYaml);
+                    }
+                    break;
+                case ConfigType.JSON:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        FromJson(_settings.Values, _defaultJson, onlyClientSide: true);
+                    }
+                    else
+                    {
+                        FromJson(_settings.Values, _defaultJson);
+                    }
+                    break;
             }
         }
         catch (Exception exception)
@@ -133,6 +232,11 @@ public class Config : IConfig
         }
     }
 
+    internal enum ConfigType
+    {
+        YAML,
+        JSON
+    }
 
     private readonly ICoreAPI _api;
     private readonly string _domain;
@@ -142,7 +246,9 @@ public class Config : IConfig
     private readonly SortedDictionary<float, IConfigBlock> _configBlocks;
     private readonly JsonObject _json;
     private readonly ConfigPatches _patches;
-    private readonly string _defaultYaml;
+    private readonly string _defaultYaml = "";
+    private readonly string _defaultJson = "";
+    private readonly ConfigType _configType = ConfigType.YAML;
 
     private void DistributeSettingsBySides(Dictionary<string, ConfigSetting> serverSideSettings)
     {
@@ -163,19 +269,36 @@ public class Config : IConfig
     }
     private void Parse(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, bool checkVersion = true)
     {
-        Version = FromJson(json, out settings, out configBlocks);
+        Version = FromJsonDefinition(json, out settings, out configBlocks);
         defaultConfig = ToYaml(settings.Values);
-        string yamlConfig = ReadYaml(defaultConfig);
+        string yamlConfig = ReadConfigFile(defaultConfig);
         bool valid = FromYaml(settings.Values, yamlConfig);
         if (checkVersion && !valid)
         {
-            WriteYaml(defaultConfig);
+            WriteConfigFile(defaultConfig);
             FromYaml(settings.Values, defaultConfig);
         }
     }
+    private void ParseJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig)
+    {
+        Version = FromJsonDefinition(json, out settings, out configBlocks);
+        string jsonConfig = ReadConfigFile("");
+
+        JsonObject jsonConfigObject = new(JObject.Parse(jsonConfig));
+        JsonObject jsonCopy = jsonConfigObject.Clone();
+        foreach (ConfigSetting setting in settings.Values)
+        {
+            JsonObjectPath jsonPath = new(setting.YamlCode);
+            JsonObject? value = jsonPath.Get(jsonConfigObject);
+            jsonPath.Set(jsonCopy, setting.Value);
+            setting.Value = value ?? setting.DefaultValue;
+        }
+
+        defaultConfig = jsonCopy.Token.ToString(Newtonsoft.Json.Formatting.Indented);
+    }
 
     #region Files
-    private string ReadYaml(string defaultConfig)
+    private string ReadConfigFile(string defaultConfig)
     {
         if (Path.Exists(ConfigFilePath))
         {
@@ -200,18 +323,17 @@ public class Config : IConfig
 
         return defaultConfig;
     }
-    private void WriteYaml(string yaml)
+    private void WriteConfigFile(string content)
     {
         try
         {
             using StreamWriter outputFile = new(ConfigFilePath);
-            outputFile.Write(yaml);
+            outputFile.Write(content);
         }
         catch (Exception exception)
         {
             _api.Logger.Error($"Exception when trying to deserialize yaml and write it to file for '{_domain}' config.\nException: {exception}\n");
         }
-
     }
     #endregion
 
@@ -245,19 +367,40 @@ public class Config : IConfig
     }
     private string ToYaml(IEnumerable<ConfigSetting> settings)
     {
-        return ConstructYaml(settings, _configBlocks);
+        return ConstructYaml(settings, _configBlocks, Version);
     }
-    private static int FromJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks)
+    private static int FromJsonDefinition(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks)
     {
         int version = 0;
         settings = new();
 
         SettingsFromJson(settings, json, ref version);
 
-        FormattingFronJson(json, out SortedDictionary<float, IConfigBlock> formatting);
+        FormattingFromJson(json, out SortedDictionary<float, IConfigBlock> formatting);
         configBlocks = CombineConfigBlocks(formatting, settings.Values);
 
         return version;
+    }
+    private static string ToJson(IEnumerable<ConfigSetting> settings, string defaultJson, bool onlyClientSide = false)
+    {
+        JsonObject config = new(JObject.Parse(defaultJson));
+        foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
+        {
+            JsonObjectPath jsonPath = new(setting.YamlCode);
+            jsonPath.Set(config, setting.Value);
+        }
+        return config.Token.ToString(Newtonsoft.Json.Formatting.Indented);
+    }
+    private static bool FromJson(IEnumerable<ConfigSetting> settings, string json, bool onlyClientSide = false)
+    {
+        JsonObject jsonConfigObject = new(JObject.Parse(json));
+        foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
+        {
+            JsonObjectPath jsonPath = new(setting.YamlCode);
+            JsonObject? value = jsonPath.Get(jsonConfigObject);
+            setting.Value = value ?? setting.DefaultValue;
+        }
+        return true;
     }
 
     private static SortedDictionary<float, IConfigBlock> CombineConfigBlocks(SortedDictionary<float, IConfigBlock> formatting, IEnumerable<ConfigSetting> settings)
@@ -266,6 +409,18 @@ public class Config : IConfig
         float increment = delta;
 
         SortedDictionary<float, IConfigBlock> configBlocks = new();
+        foreach ((float sortingWeight, IConfigBlock block) in formatting)
+        {
+            float weight = sortingWeight;
+            if (configBlocks.ContainsKey(weight))
+            {
+                weight += increment;
+                increment += delta;
+            }
+
+            configBlocks.Add(weight, block);
+        }
+
         foreach (ConfigSetting setting in settings)
         {
             float weight = setting.SortingWeight;
@@ -278,44 +433,27 @@ public class Config : IConfig
             configBlocks.Add(weight, setting);
         }
 
-        foreach ((float sortingWeight, IConfigBlock block) in formatting)
-        {
-            float weight = sortingWeight;
-            if (configBlocks.ContainsKey(weight))
-            {
-                weight -= increment;
-                increment += delta;
-            }
-
-            configBlocks.Add(weight, block);
-        }
-
         return configBlocks;
     }
-    private static void FormattingFronJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting)
+    private static void FormattingFromJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting)
     {
         formatting = new();
-        float delta = 1E-10f;
+        float delta = 1E-8f;
         float increment = delta;
 
-        foreach ((_, ConfigSetting setting) in _settings)
+        if (!json.KeyExists("formatting") || !json["formatting"].IsArray()) return;
+
+        foreach (JsonObject block in json["formatting"].AsArray())
         {
-            float weight = setting.SortingWeight;
+            IFormattingBlock formattingBlock = ParseBlock(block);
+
+            float weight = formattingBlock.SortingWeight;
             if (formatting.ContainsKey(weight))
             {
-                weight += _increment;
-                _increment += _delta;
+                weight += increment;
+                increment += delta;
             }
-            formatting.Add(weight, setting);
-        }
-
-        if (json.KeyExists("formatting") && json["formatting"].IsArray())
-        {
-            foreach (JsonObject block in json["formatting"].AsArray())
-            {
-                IFormattingBlock formattingBlock = ParseBlock(block);
-                formatting.Add(formattingBlock.SortingWeight, formattingBlock);
-            }
+            formatting.Add(weight, formattingBlock);
         }
     }
     private static IFormattingBlock ParseBlock(JsonObject block)
@@ -332,9 +470,11 @@ public class Config : IConfig
     {
         return new JsonObject(ConvertValue(value, ConfigSettingType.Integer)).AsInt(0);
     }
-    private static string ConstructYaml(IEnumerable<ConfigSetting> settings, SortedDictionary<float, IConfigBlock> formatting)
+    private static string ConstructYaml(IEnumerable<ConfigSetting> settings, SortedDictionary<float, IConfigBlock> formatting, int version)
     {
         SettingsToYaml(settings, out SortedDictionary<float, string> yaml);
+
+        yaml.Add(-1, $"version: {version}");
 
         foreach ((float weight, IConfigBlock block) in formatting.Where(entry => entry.Value is IFormattingBlock))
         {

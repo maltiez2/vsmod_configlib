@@ -52,11 +52,11 @@ public class ConfigPatches
         }
     }
 
-    public HashSet<string> GetFiles(JsonObject definition)
+    public static HashSet<string> GetFiles(JsonObject? definition)
     {
         HashSet<string> files = new();
 
-        if (definition.Token is not JObject categories) return files;
+        if (definition?.Token is not JObject categories) return files;
 
         foreach ((_, JToken? category) in categories)
         {

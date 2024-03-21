@@ -3,7 +3,7 @@
   "settings": {
     "float": {
       "setting-code": {
-        "path": "path/in/config/file/to/value",
+        "name": "path/in/config/file/to/value",
         "title": "domain:lang-code",
         "weight": 0.9,
         "comment": "Comment displayed as hint",
