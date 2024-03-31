@@ -260,6 +260,9 @@ public sealed class Config : IConfig
             {
                 _settings[code] = serverSideSettings[code];
                 _serverSideSettings.Add(code, serverSideSettings[code]);
+
+                float weight = _configBlocks.Where(entry => (entry.Value as ConfigSetting)?.YamlCode == serverSideSettings[code].YamlCode).Select(entry => entry.Key).FirstOrDefault();
+                _configBlocks[weight] = serverSideSettings[code];
             }
             else
             {

@@ -224,7 +224,7 @@ public class ConfigSettingPacket
 {
     public string Value { get; set; } = "";
     public string DefaultValue { get; set; } = "";
-    public ConfigSettingType SettingType { get; set; } = ConfigSettingType.Float;
+    public ConfigSettingType SettingType { get; set; } = ConfigSettingType.None;
     public string YamlCode { get; set; } = "";
     public string? MappingKey { get; set; }
     public string? Comment { get; set; }
