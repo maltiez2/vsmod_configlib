@@ -24,9 +24,9 @@ public sealed class Config : IConfig
 
         try
         {
-            Parse(json, out _settings, out _configBlocks, out _defaultYaml);
+            Parse(json, out _settings, out _configBlocks, out _defaultYaml, domain);
             _clientSideSettings = _settings;
-            _serverSideSettings = _settings;
+            WriteToFile();
             _patches = new(api, this);
         }
         catch (ConfigLibException exception)
@@ -48,8 +48,9 @@ public sealed class Config : IConfig
 
         try
         {
-            Parse(json, out _settings, out _configBlocks, out _defaultYaml, checkVersion: false);
+            Parse(json, out _settings, out _configBlocks, out _defaultYaml, domain, checkVersion: false);
             DistributeSettingsBySides(serverSideSettings);
+            WriteToFile();
             _patches = new(api, this);
         }
         catch (ConfigLibException exception)
@@ -71,9 +72,8 @@ public sealed class Config : IConfig
 
         try
         {
-            ParseJson(json, out _settings, out _configBlocks, out _defaultJson);
+            ParseJson(json, out _settings, out _configBlocks, out _defaultJson, domain);
             _clientSideSettings = _settings;
-            _serverSideSettings = _settings;
             _patches = new(api, this);
         }
         catch (ConfigLibException exception)
@@ -96,7 +96,7 @@ public sealed class Config : IConfig
 
         try
         {
-            ParseJson(json, out _settings, out _configBlocks, out _defaultJson);
+            ParseJson(json, out _settings, out _configBlocks, out _defaultJson, domain);
             DistributeSettingsBySides(serverSideSettings);
             _patches = new(api, this);
         }
@@ -242,7 +242,6 @@ public sealed class Config : IConfig
     private readonly string _domain;
     private readonly Dictionary<string, ConfigSetting> _settings;
     private readonly Dictionary<string, ConfigSetting> _clientSideSettings = new();
-    private readonly Dictionary<string, ConfigSetting> _serverSideSettings = new();
     private readonly SortedDictionary<float, IConfigBlock> _configBlocks;
     private readonly JsonObject _json;
     private readonly ConfigPatches _patches;
@@ -254,25 +253,22 @@ public sealed class Config : IConfig
     {
         foreach ((string code, ConfigSetting setting) in _settings)
         {
-            _clientSideSettings.Add(code, setting);
+            bool serverSide = serverSideSettings.ContainsKey(code) && !serverSideSettings[code].ClientSide;
 
-            if (!setting.ClientSide && serverSideSettings.ContainsKey(code))
+            if (serverSide)
             {
-                _settings[code] = serverSideSettings[code];
-                _serverSideSettings.Add(code, serverSideSettings[code]);
-
-                float weight = _configBlocks.Where(entry => (entry.Value as ConfigSetting)?.YamlCode == serverSideSettings[code].YamlCode).Select(entry => entry.Key).FirstOrDefault();
-                _configBlocks[weight] = serverSideSettings[code];
+                _clientSideSettings.Add(code, setting.Clone());
+                _settings[code].SetValueFrom(serverSideSettings[code]);
             }
             else
             {
-                _serverSideSettings.Add(code, _settings[code]);
+                _clientSideSettings.Add(code, setting);
             }
         }
     }
-    private void Parse(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, bool checkVersion = true)
+    private void Parse(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, string domain, bool checkVersion = true)
     {
-        Version = FromJsonDefinition(json, out settings, out configBlocks);
+        Version = FromJsonDefinition(json, out settings, out configBlocks, domain);
         defaultConfig = ToYaml(settings.Values);
         string yamlConfig = ReadConfigFile(defaultConfig);
         bool valid = FromYaml(settings.Values, yamlConfig);
@@ -282,9 +278,9 @@ public sealed class Config : IConfig
             FromYaml(settings.Values, defaultConfig);
         }
     }
-    private void ParseJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig)
+    private void ParseJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, string domain)
     {
-        Version = FromJsonDefinition(json, out settings, out configBlocks);
+        Version = FromJsonDefinition(json, out settings, out configBlocks, domain);
         string jsonConfig = ReadConfigFile("");
 
         JsonObject jsonConfigObject = new(JObject.Parse(jsonConfig));
@@ -372,12 +368,12 @@ public sealed class Config : IConfig
     {
         return ConstructYaml(settings, _configBlocks, Version);
     }
-    private static int FromJsonDefinition(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks)
+    private static int FromJsonDefinition(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
     {
         int version = 0;
         settings = new();
 
-        SettingsFromJson(settings, json, ref version);
+        SettingsFromJson(settings, json, ref version, domain);
 
         FormattingFromJson(json, out SortedDictionary<float, IConfigBlock> formatting);
         configBlocks = CombineConfigBlocks(formatting, settings.Values);
@@ -545,41 +541,41 @@ public sealed class Config : IConfig
             yaml.Add(weight, setting.ToYaml());
         }
     }
-    private static void SettingsFromJson(Dictionary<string, ConfigSetting> settings, JsonObject definition, ref int version)
+    private static void SettingsFromJson(Dictionary<string, ConfigSetting> settings, JsonObject definition, ref int version, string domain)
     {
         version = definition["version"]?.AsInt(0) ?? 0;
 
         if (definition["settings"].KeyExists("boolean"))
         {
-            ParseSettingsCategory(definition["settings"]["boolean"], settings, ConfigSettingType.Boolean);
+            ParseSettingsCategory(definition["settings"]["boolean"], settings, ConfigSettingType.Boolean, domain);
         }
 
         if (definition["settings"].KeyExists("integer"))
         {
-            ParseSettingsCategory(definition["settings"]["integer"], settings, ConfigSettingType.Integer);
+            ParseSettingsCategory(definition["settings"]["integer"], settings, ConfigSettingType.Integer, domain);
         }
 
         if (definition["settings"].KeyExists("float"))
         {
-            ParseSettingsCategory(definition["settings"]["float"], settings, ConfigSettingType.Float);
+            ParseSettingsCategory(definition["settings"]["float"], settings, ConfigSettingType.Float, domain);
         }
 
         if (definition["settings"].KeyExists("number"))
         {
-            ParseSettingsCategory(definition["settings"]["number"], settings, ConfigSettingType.Float);
+            ParseSettingsCategory(definition["settings"]["number"], settings, ConfigSettingType.Float, domain);
         }
 
         if (definition["settings"].KeyExists("string"))
         {
-            ParseSettingsCategory(definition["settings"]["string"], settings, ConfigSettingType.String);
+            ParseSettingsCategory(definition["settings"]["string"], settings, ConfigSettingType.String, domain);
         }
 
         if (definition["settings"].KeyExists("other"))
         {
-            ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other);
+            ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other, domain);
         }
     }
-    private static void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType)
+    private static void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType, string domain)
     {
         foreach (JToken item in category.Token)
         {
@@ -589,7 +585,7 @@ public sealed class Config : IConfig
             }
 
             string code = property.Name;
-            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType);
+            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType, domain);
             settings.Add(code, setting);
         }
     }
