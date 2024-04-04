@@ -26,6 +26,7 @@ public interface IConfig
 
 public enum ConfigSettingType
 {
+    None,
     Boolean,
     Float,
     Integer,

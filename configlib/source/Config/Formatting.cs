@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using System.Text;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 
 namespace ConfigLib.Formatting;
@@ -31,15 +32,15 @@ internal sealed class Separator : IFormattingBlock
 {
     public Separator(JsonObject definition)
     {
-        mWeight = definition["weight"].AsFloat(0);
-        mWeight = mWeight < 0 ? 0 : mWeight;
+        _weight = definition["weight"].AsFloat(0);
+        _weight = _weight < 0 ? 0 : _weight;
         StringBuilder yaml = new();
         yaml.Append("\n\n");
 
         if (definition.KeyExists("title"))
         {
             string title = definition["title"].AsString();
-            mTitle = title;
+            _title = title;
             int width = title.Length + 6;
             string line = new string('#', width);
             yaml.Append($"{line}\n## {title} ##\n{line}\n");
@@ -48,38 +49,45 @@ internal sealed class Separator : IFormattingBlock
         if (definition.KeyExists("text"))
         {
             string text = definition["text"].AsString();
-            mText = text;
+            _text = text;
             string[] lines = text.Split('\n');
             string composed = lines.Select(line => $"# {line}").Aggregate((first, second) => $"{first}\n{second}");
             yaml.Append($"{composed}\n");
         }
 
-        mYaml = yaml.ToString();
+        _yaml = yaml.ToString();
     }
 
-    public string Yaml => mYaml;
-    public float SortingWeight => mWeight;
+    public string Yaml => _yaml;
+    public float SortingWeight => _weight;
 
     public void Draw(string id)
     {
-        if (mTitle != null)
+        if (_title != null)
         {
-            ImGuiNET.ImGui.SeparatorText(mTitle);
+            ImGuiNET.ImGui.SeparatorText(_title);
         }
         else
         {
             ImGuiNET.ImGui.Separator();
         }
 
-        if (mText != null)
+        if (_text != null)
         {
-            ImGuiNET.ImGui.TextWrapped(mText);
+            ImGuiNET.ImGui.TextWrapped(_text);
         }
     }
 
 
-    private readonly string mYaml;
-    private readonly float mWeight;
-    private readonly string? mTitle;
-    private readonly string? mText;
+    private readonly string _yaml;
+    private readonly float _weight;
+    private readonly string? _title;
+    private readonly string? _text;
+
+    private static string Localize(string value, string domain)
+    {
+        bool hasDomain = value.Contains(':');
+        string langCode = hasDomain ? value : $"{domain}:{value}";
+        return Lang.Get(langCode);
+    }
 }

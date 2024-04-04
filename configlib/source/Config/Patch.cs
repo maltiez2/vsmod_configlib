@@ -1,23 +1,21 @@
-﻿using HarmonyLib;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using SimpleExpressionEngine;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Text.RegularExpressions;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 using Vintagestory.Common;
+using YamlDotNet.Core.Tokens;
 
 namespace ConfigLib;
 
 public class ConfigPatches
 {
-    private readonly ICoreAPI mApi;
-    private readonly List<AssetPatch> mPatches = new();
+    private readonly ICoreAPI _api;
+    private readonly List<AssetPatch> _patches = new();
 
     public ConfigPatches(ICoreAPI api, Config config)
     {
-        mApi = api;
+        _api = api;
 
         HashSet<string> files = GetFiles(config.Definition["patches"]);
 
@@ -25,29 +23,29 @@ public class ConfigPatches
         {
             try
             {
-                mPatches.Add(new(api, filePath, config));
+                _patches.Add(new(api, filePath, config));
             }
             catch (Exception exception)
             {
-                mApi.Logger.Debug($"[Config lib] Exception on creating patch to asset: '{filePath}'.");
-                mApi.Logger.VerboseDebug($"[Config lib] Exception on creating patch to asset:\n{exception}\n.");
+                _api.Logger.Debug($"[Config lib] Exception on creating patch to asset: '{filePath}'.");
+                _api.Logger.VerboseDebug($"[Config lib] Exception on creating patch to asset:\n{exception}\n.");
             }
         }
     }
 
     public void Apply()
     {
-        foreach (AssetPatch patch in mPatches)
+        foreach (AssetPatch patch in _patches)
         {
             try
             {
                 (int successful, int failed) = patch.Apply(out bool serverSide);
-                if (!serverSide && successful >= 0) mApi.Logger.Debug($"[Config lib] Values patched: {successful}, failed: {failed} in asset: '{patch.File}'.");
+                if (!serverSide && successful >= 0) _api.Logger.Debug($"[Config lib] Values patched: {successful}, failed: {failed} in asset: '{patch.File}'.");
             }
             catch (Exception exception)
             {
-                mApi.Logger.Debug($"[Config lib] Exception on applying patch to asset: '{patch.File}'.");
-                mApi.Logger.VerboseDebug($"[Config lib] Exception on applying patch to asset:\n{exception}\n.");
+                _api.Logger.Debug($"[Config lib] Exception on applying patch to asset: '{patch.File}'.");
+                _api.Logger.VerboseDebug($"[Config lib] Exception on applying patch to asset:\n{exception}\n.");
             }
         }
     }
@@ -72,14 +70,14 @@ public class ConfigPatches
     }
 }
 
-internal class AssetPatch
+internal partial class AssetPatch
 {
-    public string File => mAsset;
+    public string File => _asset;
 
-    private readonly string mAsset;
-    private readonly List<IValuePatch> mPatches = new();
-    private readonly ICoreAPI mApi;
-    private readonly HashSet<AssetCategory> mServerSideCategories = new()
+    private readonly string _asset;
+    private readonly List<IValuePatch> _patches = new();
+    private readonly ICoreAPI _api;
+    private readonly HashSet<AssetCategory> _serverSideCategories = new()
     {
         AssetCategory.itemtypes,
         AssetCategory.blocktypes,
@@ -89,40 +87,26 @@ internal class AssetPatch
 
     public AssetPatch(ICoreAPI api, string assetPath, Config config)
     {
-        mApi = api;
-        mAsset = assetPath;
+        _api = api;
+        _asset = assetPath;
 
         JsonObject definition = config.Definition["patches"];
-        CombinedContext<float, float> context = new(new List<IContext<float, float>>() { new MathContext(), new NumberSettingsContext(config.Settings) });
+        CombinedContext<float, float> context = new(new List<IContext<float, float>>() { new MathContext(), new BooleanMathContext(), new NumberSettingsContext(config.Settings) });
 
-        if (!ConstructBooleanPatches(definition, assetPath, config))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'boolean' patches for '{assetPath}'.");
-        }
+        if (!ConstructBooleanPatches(definition, assetPath, context))
+            _api.Logger.Debug($"[Config lib] Error on parsing 'boolean' patches for '{assetPath}'.");
         if (!ConstructNumberPatches(definition, assetPath, context, "number", ConfigSettingType.Float))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'number' patches for '{assetPath}'.");
-        }
+            _api.Logger.Debug($"[Config lib] Error on parsing 'number' patches for '{assetPath}'.");
         if (!ConstructNumberPatches(definition, assetPath, context, "float", ConfigSettingType.Float))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'float' patches for '{assetPath}'.");
-        }
+            _api.Logger.Debug($"[Config lib] Error on parsing 'float' patches for '{assetPath}'.");
         if (!ConstructNumberPatches(definition, assetPath, context, "integer", ConfigSettingType.Integer))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'integer' patches for '{assetPath}'.");
-        }
+            _api.Logger.Debug($"[Config lib] Error on parsing 'integer' patches for '{assetPath}'.");
         if (!ConstructConstPatches(definition, assetPath))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'const' patches for '{assetPath}'.");
-        }
-        if (!ConstructStringPatches(definition, assetPath, config))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'string' patches for '{assetPath}'.");
-        }
-        if (!ConstructJsonPatches(definition, assetPath, config))
-        {
-            mApi.Logger.Debug($"[Config lib] Error on parsing 'other' patches for '{assetPath}'.");
-        }
+            _api.Logger.Debug($"[Config lib] Error on parsing 'const' patches for '{assetPath}'.");
+        if (!ConstructStringPatches(definition, assetPath, config, context))
+            _api.Logger.Debug($"[Config lib] Error on parsing 'string' patches for '{assetPath}'.");
+        if (!ConstructJsonPatches(definition, assetPath, config, context))
+            _api.Logger.Debug($"[Config lib] Error on parsing 'other' patches for '{assetPath}'.");
     }
 
     public (int successful, int failed) Apply(out bool serverSideAsset)
@@ -133,7 +117,7 @@ internal class AssetPatch
 
         int count = 0;
 
-        foreach (IValuePatch patch in mPatches)
+        foreach (IValuePatch patch in _patches)
         {
             try
             {
@@ -141,22 +125,22 @@ internal class AssetPatch
             }
             catch (Exception exception)
             {
-                mApi.Logger.VerboseDebug($"[Config lib] Failed to apply patch to '{mAsset}' asset.\nException: {exception}\n");
+                _api.Logger.VerboseDebug($"[Config lib] Failed to apply patch to '{_asset}' asset.\nException: {exception}\n");
                 count++;
             }
         }
 
         StoreAsset(asset);
 
-        return (mPatches.Count - count, count);
+        return (_patches.Count - count, count);
     }
 
     private JsonObject? RetrieveAsset(out bool serverSide)
     {
         serverSide = false;
 
-        AssetLocation location = new(mAsset);
-        if (mApi.Side == EnumAppSide.Client && mServerSideCategories.Contains(location.Category))
+        AssetLocation location = new(_asset);
+        if (_api.Side == EnumAppSide.Client && _serverSideCategories.Contains(location.Category))
         {
             serverSide = true;
             return null;
@@ -165,17 +149,17 @@ internal class AssetPatch
         IAsset? asset;
         try
         {
-            asset = mApi.Assets.Get(mAsset);
+            asset = _api.Assets.Get(_asset);
         }
         catch
         {
-            mApi.Logger.Debug($"[Config lib] Asset '{mAsset}' not found, skipping it.");
+            _api.Logger.Debug($"[Config lib] Asset '{_asset}' not found, skipping it.");
             return null;
         }
 
         if (asset == null) return null;
 
-        
+
 
         string json = Asset.BytesToString(asset.Data);
 
@@ -198,12 +182,14 @@ internal class AssetPatch
 
     private void StoreAsset(JsonObject data)
     {
-        IAsset? asset = mApi.Assets.Get(mAsset);
+        IAsset? asset = _api.Assets.Get(_asset);
         if (asset == null) return;
         asset.Data = System.Text.Encoding.UTF8.GetBytes(data.ToString());
     }
 
-    private bool ConstructBooleanPatches(JsonObject definition, string assetPath, Config config)
+    private static readonly Regex _booleanExpressionRegex = GetBooleanExpressionRegex();
+
+    private bool ConstructBooleanPatches(JsonObject definition, string assetPath, CombinedContext<float, float> context)
     {
         if (!definition.KeyExists("boolean")) return true;
         if (!definition["boolean"].KeyExists(assetPath)) return true;
@@ -215,29 +201,20 @@ internal class AssetPatch
         {
             if (value is not JValue boolValue || boolValue.Type != JTokenType.String)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
                 failed = true;
                 continue;
             }
             string setting = (string?)boolValue.Value ?? "";
-            if (config.GetSetting(setting) == null)
-            {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': bool setting '{setting}' not found.");
-                failed = true;
-                continue;
-            }
-            if (config.GetSetting(setting)?.SettingType != ConfigSettingType.Boolean)
-            {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not form 'boolean' category.");
-                failed = true;
-                continue;
-            }
-            mPatches.Add(new BooleanPatch(key, setting, config));
+
+            setting = Process(setting, context);
+
+            _patches.Add(new BooleanPatch(key, setting, context));
         }
 
         return !failed;
     }
-    private bool ConstructStringPatches(JsonObject definition, string assetPath, Config config)
+    private bool ConstructStringPatches(JsonObject definition, string assetPath, Config config, CombinedContext<float, float> context)
     {
         if (!definition.KeyExists("string")) return true;
         if (!definition["string"].KeyExists(assetPath)) return true;
@@ -249,29 +226,32 @@ internal class AssetPatch
         {
             if (value is not JValue boolValue || boolValue.Type != JTokenType.String)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
                 failed = true;
                 continue;
             }
+            
             string setting = (string?)boolValue.Value ?? "";
+            setting = Process(setting, context);
+
             if (config.GetSetting(setting) == null)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
                 failed = true;
                 continue;
             }
             if (config.GetSetting(setting)?.SettingType != ConfigSettingType.String)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not from 'string' category.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not from 'string' category.");
                 failed = true;
                 continue;
             }
-            mPatches.Add(new StringPatch(key, setting, config));
+            _patches.Add(new StringPatch(key, setting, config));
         }
 
         return !failed;
     }
-    private bool ConstructJsonPatches(JsonObject definition, string assetPath, Config config)
+    private bool ConstructJsonPatches(JsonObject definition, string assetPath, Config config, CombinedContext<float, float> context)
     {
         if (!definition.KeyExists("other")) return true;
         if (!definition["other"].KeyExists(assetPath)) return true;
@@ -283,24 +263,27 @@ internal class AssetPatch
         {
             if (value is not JValue boolValue || boolValue.Type != JTokenType.String)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': patch value '{value}' is not string.");
                 failed = true;
                 continue;
             }
+
             string setting = (string?)boolValue.Value ?? "";
+            setting = Process(setting, context);
+            
             if (config.GetSetting(setting) == null)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
                 failed = true;
                 continue;
             }
             if (config.GetSetting(setting)?.SettingType != ConfigSettingType.Other)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not form 'other' category.");
+                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not form 'other' category.");
                 failed = true;
                 continue;
             }
-            mPatches.Add(new JsonPatch(key, setting, config));
+            _patches.Add(new JsonPatch(key, setting, config));
         }
 
         return !failed;
@@ -315,15 +298,16 @@ internal class AssetPatch
 
         foreach ((string key, JToken? value) in jsonPatches)
         {
-            if (value is not JValue boolValue || boolValue.Type != JTokenType.String)
+            if (value is not JValue formula || formula.Type != JTokenType.String)
             {
-                mApi.Logger.Error($"[Config lib] Error on parsing '{category}' patch '{assetPath}/{key}': patch value '{value}' is not string.");
+                _api.Logger.Error($"[Config lib] Error on parsing '{category}' patch '{assetPath}/{key}': patch value '{value}' is not string.");
                 failed = true;
                 continue;
             }
-            string setting = (string?)boolValue.Value ?? "";
+            string setting = (string?)formula.Value ?? "";
+            setting = Process(setting, context);
 
-            mPatches.Add(new NumberPatch(key, setting, context, type));
+            _patches.Add(new NumberPatch(key, setting, context, type));
         }
 
         return !failed;
@@ -338,10 +322,29 @@ internal class AssetPatch
 
         foreach ((string key, JToken? value) in jsonPatches)
         {
-            mPatches.Add(new ConstPatch(key, new JsonObject(value)));
+            _patches.Add(new ConstPatch(key, new JsonObject(value)));
         }
 
         return !failed;
+    }
+
+    [GeneratedRegex("\\((?<expression>.+)\\) \\? (?<true>.+) \\: (?<false>.+)", RegexOptions.Compiled)]
+    private static partial Regex GetBooleanExpressionRegex();
+
+    private const float _epsilon = 1e-10f;
+    private string Process(string value, IContext<float, float> context)
+    {
+        Match match = _booleanExpressionRegex.Match(value);
+
+        if (!match.Success) return value;
+
+        string expression = match.Groups["expression"].Value;
+        string onTrue = match.Groups["true"].Value;
+        string onFalse = match.Groups["false"].Value;
+
+        float result = MathParser.Parse(expression).Evaluate(context);
+
+        return Math.Abs(result) > _epsilon ? onTrue : onFalse;
     }
 }
 
@@ -350,26 +353,63 @@ internal interface IValuePatch
     void Apply(JsonObject asset);
 }
 
+internal sealed class BooleanExpressionSelector
+{
+    private readonly INode<float, float, float> _value;
+    private readonly IContext<float, float> _context;
+    private readonly string _onTrue;
+    private readonly string _onFalse;
+    private const float _epsilon = 1e-10f;
+
+    public BooleanExpressionSelector(string expression, string onTrue, string onFalse, IContext<float, float> context)
+    {
+        _value = MathParser.Parse(expression);
+        _context = context;
+        _onTrue = onTrue;
+        _onFalse = onFalse;
+    }
+
+    public string Resolve(float value)
+    {
+        CombinedContext<float, float> context = new(new List<IContext<float, float>> { _context, new ValueContext<float, float>(value) });
+
+        float result = _value.Evaluate(context);
+
+        return Math.Abs(result) > _epsilon ? _onTrue : _onFalse;
+    }
+}
+
 internal sealed class NumberPatch : IValuePatch
 {
-    private readonly JsonObjectPath mPath;
-    private readonly INode<float, float, float> mValue;
-    private readonly IContext<float, float> mContext;
-    private readonly ConfigSettingType mReturnType;
+    private readonly JsonObjectPath _path;
+    private readonly INode<float, float, float> _value;
+    private readonly IContext<float, float> _context;
+    private readonly ConfigSettingType _returnType;
 
     public NumberPatch(string path, string formula, IContext<float, float> context, ConfigSettingType type)
     {
-        mPath = new(path);
-        mValue = MathParser.Parse(formula);
-        mContext = context;
-        mReturnType = type;
+        _path = new(path);
+        _value = MathParser.Parse(formula);
+        _context = context;
+        _returnType = type;
     }
 
     public void Apply(JsonObject asset)
     {
-        float value = mValue.Evaluate(mContext);
-        JsonObject? jsonValue = mPath.Get(asset);
-        switch (mReturnType)
+        JsonObject? jsonValue = _path.Get(asset);
+
+        float previousValue = jsonValue?.AsFloat(0) ?? 0;
+
+        if (jsonValue is not null && ((JValue)jsonValue.Token).Value is bool)
+        {
+            previousValue = jsonValue.AsBool() ? 1 : 0;
+        }
+
+        CombinedContext<float, float> context = new(new List<IContext<float, float>> { new ValueContext<float, float>(previousValue), _context });
+
+        float value = _value.Evaluate(context);
+        
+        switch (_returnType)
         {
             case ConfigSettingType.Float:
                 jsonValue?.Token.Replace(new JValue(value));
@@ -382,19 +422,30 @@ internal sealed class NumberPatch : IValuePatch
 }
 internal sealed class BooleanPatch : IValuePatch
 {
-    private readonly JsonObjectPath mPath;
-    private readonly bool mValue;
+    private readonly JsonObjectPath _path;
+    private readonly INode<float, float, float> _value;
+    private readonly IContext<float, float> _context;
+    private const float _epsilon = 1e-10f;
 
-    public BooleanPatch(string path, string value, Config config)
+    public BooleanPatch(string path, string formula, IContext<float, float> context)
     {
-        mPath = new(path);
-        mValue = config.GetSetting(value)?.Value.AsBool(false) ?? false;
+        _path = new(path);
+        _value = MathParser.Parse(formula);
+        _context = context;
     }
 
     public void Apply(JsonObject asset)
     {
-        JsonObject? jsonValue = mPath.Get(asset);
-        jsonValue?.Token.Replace(new JValue(mValue));
+        JsonObject? jsonValue = _path.Get(asset);
+
+        float previousValue = (jsonValue?.AsBool() ?? false) ? 1 : 0;
+
+        CombinedContext<float, float> context = new(new List<IContext<float, float>> { _context, new ValueContext<float, float>(previousValue) });
+
+        float value = _value.Evaluate(context);
+        bool result = Math.Abs(value) > _epsilon;
+
+        jsonValue?.Token.Replace(new JValue(result));
     }
 }
 internal sealed class StringPatch : IValuePatch
