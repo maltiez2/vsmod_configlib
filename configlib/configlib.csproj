@@ -62,17 +62,6 @@
 
   <!-- References to libraries that are being used in project -->
   <ItemGroup>
-    <!-- ImGUI for in-game GUI for editing configs -->
-    <Reference Include="ImGui.NET">
-      <HintPath>$(ImGuiSubmoduleOutput)\ImGui.NET.dll</HintPath>
-      <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-    </Reference>
-    <Reference Include="VSImGui">
-      <HintPath>$(ImGuiSubmoduleOutput)\VSImGui.dll</HintPath>
-      <Private>False</Private>
-      <EmbedInteropTypes>False</EmbedInteropTypes>
-    </Reference>
     <!-- Additional dependencies: will be merged into main dll by ILRepack -->
     <Reference Include="YamlDotNet">
       <HintPath>..\lib\YamlDotNet.dll</HintPath>
@@ -144,6 +133,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="VSImGui" Version="0.0.6" />
   </ItemGroup>
   
   <!-- Creates/updates modinfo.json file in build directory -->
