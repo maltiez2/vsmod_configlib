@@ -129,7 +129,7 @@ public class ConfigSetting : ISetting
     private string AddComments(string yamlToken)
     {
         (string first, string other) = SplitToken(yamlToken);
-        string comment = GetPreComment().Replace("\n", "");
+        string comment = GetPreComment();
         if (comment != "") comment += "\n";
         string inline = GetInlineComment();
         if (inline != "") inline = $" # {inline}";
@@ -143,7 +143,7 @@ public class ConfigSetting : ISetting
     }
     private string GetPreComment()
     {
-        return Comment == null ? "" : $"# {Comment}\n";
+        return Comment == null ? "" : $"# {Comment.Replace("\n", "\n# ")}";
     }
     private string GetInlineComment()
     {
@@ -224,8 +224,10 @@ public class ConfigSetting : ISetting
         string langCode = hasDomain ? value : $"{domain}:{value}";
         return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : value;
     }
-    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code)
-    {        
+    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code, ICoreAPI api)
+    {
+        if (!json.KeyExists("default")) LogsUtil.Error(api, typeof(ConfigSetting), $"Setting '{domain}' of type '{settingType}' does not have default value");
+
         ConfigSetting setting = new(
             yamlCode: json["name"].AsString(code),
             defaultValue: json["default"],
@@ -319,7 +321,6 @@ public class Validation
             SetValues(json["values"].AsArray(), validation);
             return (null, null, validation);
         }
-
 
         return (null, null, null);
     }
