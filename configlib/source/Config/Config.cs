@@ -375,10 +375,19 @@ public sealed class Config : IConfig
         int version = 0;
         settings = new();
 
-        SettingsFromJson(settings, json, ref version, domain);
+        bool arrayFormat = json["settings"].IsArray();
 
-        FormattingFromJson(json, out SortedDictionary<float, IConfigBlock> formatting);
-        configBlocks = CombineConfigBlocks(formatting, settings.Values);
+        if (arrayFormat)
+        {
+            SettingsAndFormattingFromJsonArray(settings, json["settings"].AsArray(), out configBlocks, ref version, domain);
+        }
+        else
+        {
+            SettingsFromJson(settings, json, ref version, domain);
+
+            FormattingFromJson(json, out SortedDictionary<float, IConfigBlock> formatting);
+            configBlocks = CombineConfigBlocks(formatting, settings.Values);
+        }
 
         return version;
     }
@@ -577,6 +586,71 @@ public sealed class Config : IConfig
             ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other, domain);
         }
     }
+    private static void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, ref int version, string domain)
+    {
+        configBlocks = new();
+        float weight = 0;
+        foreach (JsonObject block in definition)
+        {
+            string type = block["type"].AsString();
+            weight += 1;
+
+            switch (type)
+            {
+                case "separator":
+                    IConfigBlock formattingBlock = ParseFormattingBlock(type, block);
+                    configBlocks.Add(weight, formattingBlock);
+                    break;
+                case "boolean":
+                    {
+                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Boolean, domain);
+                        configBlocks.Add(weight, setting);
+                        settings.Add(code, setting);
+                    }
+                    break;
+                case "integer":
+                    {
+                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Integer, domain);
+                        configBlocks.Add(weight, setting);
+                        settings.Add(code, setting);
+                    }
+                    break;
+                case "number":
+                case "float":
+                    {
+                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Float, domain);
+                        configBlocks.Add(weight, setting);
+                        settings.Add(code, setting);
+                    }
+                    break;
+                case "string":
+                    {
+                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.String, domain);
+                        configBlocks.Add(weight, setting);
+                        settings.Add(code, setting);
+                    }
+                    break;
+                case "other":
+                    {
+                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Other, domain);
+                        configBlocks.Add(weight, setting);
+                        settings.Add(code, setting);
+                    }
+                    break;
+            }
+        }
+    }
+    private static IConfigBlock ParseFormattingBlock(string type, JsonObject block)
+    {
+        IFormattingBlock formattingBlock = ParseBlock(block);
+        return formattingBlock;
+    }
+    private static (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, ConfigSettingType settingType, string domain)
+    {
+        string code = block["code"].AsString();
+        ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code);
+        return (code , setting);
+    }
     private static void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType, string domain)
     {
         foreach (JToken item in category.Token)
@@ -587,7 +661,7 @@ public sealed class Config : IConfig
             }
 
             string code = property.Name;
-            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType, domain);
+            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType, domain, code);
             settings.Add(code, setting);
         }
     }
