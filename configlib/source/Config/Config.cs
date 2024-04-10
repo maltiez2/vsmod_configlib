@@ -376,10 +376,11 @@ public sealed class Config : IConfig
         settings = new();
 
         bool arrayFormat = json["settings"].IsArray();
+        version = json["version"]?.AsInt(0) ?? 0;
 
         if (arrayFormat)
         {
-            SettingsAndFormattingFromJsonArray(settings, json["settings"].AsArray(), out configBlocks, ref version, domain);
+            SettingsAndFormattingFromJsonArray(settings, json["settings"].AsArray(), out configBlocks, domain);
         }
         else
         {
@@ -586,7 +587,7 @@ public sealed class Config : IConfig
             ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other, domain);
         }
     }
-    private static void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, ref int version, string domain)
+    private static void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
     {
         configBlocks = new();
         float weight = 0;
