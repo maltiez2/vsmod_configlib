@@ -1,25 +1,32 @@
 {
-  "file":  "config-filename.json",
-  "settings": {
-    "float": {
-      "setting-code": {
-        "name": "path/in/config/file/to/value",
-        "title": "domain:lang-code",
-        "weight": 0.9,
-        "comment": "Comment displayed as hint",
-        "default": 1.0,
-        "clientSide": true,
-        "range": {
-          "min": 0.5,
-          "max": 2.0
-        }
-      }
-    }
-  },
-  "formatting": [
+  "settings": [
     {
       "type": "separator",
-      "weight": 1.0
+      "title": "Title"
+    },  
+    {
+      "code": "setting-code",
+      "type": "float",
+      "name": "name",
+      "title": "domain:lang-code",
+      "comment": "Comment displayed as hint",
+      "default": 1.0,
+      "clientSide": true,
+      "range": {
+        "min": 0.5,
+        "max": 2.0
+      }
+    },
+    {
+      "type": "separator"
+    },  
+    {
+      "code": "setting-code-2",
+      "type": "boolean",
+      "name": "name-2",
+      "title": "domain:lang-code",
+      "comment": "Comment displayed as hint",
+      "default": true
     }
   ]
 }

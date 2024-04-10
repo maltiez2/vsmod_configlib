@@ -224,17 +224,17 @@ public class ConfigSetting : ISetting
         string langCode = hasDomain ? value : $"{domain}:{value}";
         return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : value;
     }
-    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain)
-    {
+    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code)
+    {        
         ConfigSetting setting = new(
-            yamlCode: json["name"].AsString(),
+            yamlCode: json["name"].AsString(code),
             defaultValue: json["default"],
             settingType
             )
         {
             Value = json["default"],
             Comment = json["comment"].AsString(),
-            InGui = json["ingui"].AsString(json["nameInGui"].AsString(json["name"].AsString())),
+            InGui = json["ingui"].AsString(json["nameInGui"].AsString(json["name"].AsString(code))),
             ClientSide = json["clientSide"].AsBool(false),
             SortingWeight = json["weight"].AsFloat(0),
             Logarithmic = json["logarithmic"].AsBool(false),
