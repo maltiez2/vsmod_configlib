@@ -68,6 +68,7 @@ public sealed class Config : IConfig
         _domain = domain;
         _json = json;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
+        JsonFilePath = ConfigFilePath;
         _configType = ConfigType.JSON;
 
         try
@@ -91,6 +92,7 @@ public sealed class Config : IConfig
         _domain = domain;
         _json = json;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
+        JsonFilePath = ConfigFilePath;
         _configType = ConfigType.JSON;
         JsonFilePath = file;
 
@@ -281,7 +283,7 @@ public sealed class Config : IConfig
     private void ParseJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, string domain)
     {
         Version = FromJsonDefinition(json, out settings, out configBlocks, domain);
-        string jsonConfig = ReadConfigFile("");
+        string jsonConfig = ReadConfigFile(ConfigFilePath);
 
         JsonObject jsonConfigObject = new(JObject.Parse(jsonConfig));
         JsonObject jsonCopy = jsonConfigObject.Clone();
