@@ -370,7 +370,7 @@ public sealed class Config : IConfig
     {
         return ConstructYaml(settings, _configBlocks, Version);
     }
-    private static int FromJsonDefinition(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
+    private int FromJsonDefinition(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
     {
         settings = new();
 
@@ -391,7 +391,7 @@ public sealed class Config : IConfig
 
         return version;
     }
-    private static string ToJson(IEnumerable<ConfigSetting> settings, string defaultJson, bool onlyClientSide = false)
+    private string ToJson(IEnumerable<ConfigSetting> settings, string defaultJson, bool onlyClientSide = false)
     {
         JsonObject config = new(JObject.Parse(defaultJson));
         foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
@@ -401,7 +401,7 @@ public sealed class Config : IConfig
         }
         return config.Token.ToString(Newtonsoft.Json.Formatting.Indented);
     }
-    private static bool FromJson(IEnumerable<ConfigSetting> settings, string json, bool onlyClientSide = false)
+    private bool FromJson(IEnumerable<ConfigSetting> settings, string json, bool onlyClientSide = false)
     {
         JsonObject jsonConfigObject = new(JObject.Parse(json));
         foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
@@ -413,7 +413,7 @@ public sealed class Config : IConfig
         return true;
     }
 
-    private static SortedDictionary<float, IConfigBlock> CombineConfigBlocks(SortedDictionary<float, IConfigBlock> formatting, IEnumerable<ConfigSetting> settings)
+    private SortedDictionary<float, IConfigBlock> CombineConfigBlocks(SortedDictionary<float, IConfigBlock> formatting, IEnumerable<ConfigSetting> settings)
     {
         float delta = 1E-10f;
         float increment = delta;
@@ -445,7 +445,7 @@ public sealed class Config : IConfig
 
         return configBlocks;
     }
-    private static void FormattingFromJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting, string domain)
+    private void FormattingFromJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting, string domain)
     {
         formatting = new();
         float delta = 1E-8f;
@@ -466,7 +466,7 @@ public sealed class Config : IConfig
             formatting.Add(weight, formattingBlock);
         }
     }
-    private static IFormattingBlock ParseBlock(JsonObject block, string domain)
+    private IFormattingBlock ParseBlock(JsonObject block, string domain)
     {
         switch (block["type"]?.AsString())
         {
@@ -476,11 +476,11 @@ public sealed class Config : IConfig
 
         return new Blank();
     }
-    private static int ConvertVersion(JToken value)
+    private int ConvertVersion(JToken value)
     {
         return new JsonObject(ConvertValue(value, ConfigSettingType.Integer)).AsInt(0);
     }
-    private static string ConstructYaml(IEnumerable<ConfigSetting> settings, SortedDictionary<float, IConfigBlock> formatting, int version)
+    private string ConstructYaml(IEnumerable<ConfigSetting> settings, SortedDictionary<float, IConfigBlock> formatting, int version)
     {
         SettingsToYaml(settings, out SortedDictionary<float, string> yaml);
 
@@ -493,7 +493,7 @@ public sealed class Config : IConfig
 
         return yaml.Select(entry => entry.Value).Aggregate((first, second) => $"{first}\n{second}");
     }
-    private static void ValuesFromYaml(out Dictionary<string, JsonObject> values, string yaml)
+    private void ValuesFromYaml(out Dictionary<string, JsonObject> values, string yaml)
     {
         IDeserializer deserializer = new DeserializerBuilder().Build();
         object? yamlObject = deserializer.Deserialize(yaml);
@@ -511,7 +511,7 @@ public sealed class Config : IConfig
             values.Add(code, new(value));
         }
     }
-    private static JToken ConvertValue(JToken? value, ConfigSettingType type)
+    private JToken ConvertValue(JToken? value, ConfigSettingType type)
     {
         string? strValue = (string?)(value as JValue)?.Value;
         if (strValue == null) return value ?? new JValue(strValue);
@@ -535,7 +535,7 @@ public sealed class Config : IConfig
                 return value ?? new JValue(strValue);
         }
     }
-    private static void SettingsToYaml(IEnumerable<ConfigSetting> settings, out SortedDictionary<float, string> yaml)
+    private void SettingsToYaml(IEnumerable<ConfigSetting> settings, out SortedDictionary<float, string> yaml)
     {
         float delta = 1E-10f;
         float increment = delta;
@@ -552,7 +552,7 @@ public sealed class Config : IConfig
             yaml.Add(weight, setting.ToYaml());
         }
     }
-    private static void SettingsFromJson(Dictionary<string, ConfigSetting> settings, JsonObject definition, ref int version, string domain)
+    private void SettingsFromJson(Dictionary<string, ConfigSetting> settings, JsonObject definition, ref int version, string domain)
     {
         version = definition["version"]?.AsInt(0) ?? 0;
 
@@ -586,7 +586,7 @@ public sealed class Config : IConfig
             ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other, domain);
         }
     }
-    private static void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
+    private void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
     {
         configBlocks = new();
         float weight = 0;
@@ -619,18 +619,18 @@ public sealed class Config : IConfig
             setting.SortingWeight = weight;
         }
     }
-    private static IConfigBlock ParseFormattingBlock(string type, JsonObject block, string domain)
+    private IConfigBlock ParseFormattingBlock(string type, JsonObject block, string domain)
     {
         IFormattingBlock formattingBlock = ParseBlock(block, domain);
         return formattingBlock;
     }
-    private static (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, ConfigSettingType settingType, string domain)
+    private (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, ConfigSettingType settingType, string domain)
     {
         string code = block["code"].AsString();
-        ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code);
+        ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code, _api);
         return (code , setting);
     }
-    private static void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType, string domain)
+    private void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType, string domain)
     {
         foreach (JToken item in category.Token)
         {
@@ -640,7 +640,7 @@ public sealed class Config : IConfig
             }
 
             string code = property.Name;
-            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType, domain, code);
+            ConfigSetting setting = ConfigSetting.FromJson(new(property.Value), settingType, domain, code, _api);
             settings.Add(code, setting);
         }
     }
