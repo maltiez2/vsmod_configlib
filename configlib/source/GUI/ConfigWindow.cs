@@ -1,9 +1,7 @@
 ﻿using ConfigLib.Formatting;
 using ImGuiNET;
 using Newtonsoft.Json.Linq;
-using System;
 using Vintagestory.API.Client;
-using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using VSImGui;
 
@@ -74,9 +72,9 @@ internal class ConfigWindow
             ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
             ImGuiWindowFlags flags = ImGuiWindowFlags.MenuBar;
             if (_unsavedChanges) flags |= ImGuiWindowFlags.UnsavedDocument;
-            
+
             ImGui.Begin("Configs##configlib", ref opened, flags);
-            
+
             DrawMenuBar();
             DrawConfigList();
 
@@ -110,7 +108,7 @@ internal class ConfigWindow
     private void DrawMenuBar()
     {
         if (!ImGui.BeginMenuBar()) return;
-        
+
         if (!_unsavedChanges) ImGui.BeginDisabled();
         if (ImGui.MenuItem("Save All"))
         {
@@ -327,7 +325,7 @@ internal class ConfigWindow
         foreach ((float weight, IConfigBlock? block) in config.ConfigBlocks)
         {
             if (
-                block is ConfigSetting setting && (
+                block is ConfigSetting setting && !setting.Hide && (
                     StyleEditor.Match(filter, setting.YamlCode) ||
                     StyleEditor.Match(filter, setting.InGui ?? setting.YamlCode)
                 )
@@ -426,7 +424,7 @@ internal class ConfigWindow
     {
         if (setting.Validation?.Mapping == null || setting.MappingKey == null) return;
         string[] values = setting.Validation.Mapping.Keys.ToArray();
-        setting.MappingKey = values[DrawComboBox(Title(name), setting.MappingKey, values)];
+        setting.MappingKey = values[DrawComboBox(Title(name), setting.MappingKey, values, setting)];
     }
 
     private void DrawValuesSetting(string name, ConfigSetting setting)
@@ -434,7 +432,7 @@ internal class ConfigWindow
         if (setting.Validation?.Values == null) return;
         string[] values = setting.Validation.Values.Select((value) => value.Token.ToString()).ToArray();
         string value = setting.Value.ToString();
-        int index = DrawComboBox(Title(name), value, values);
+        int index = DrawComboBox(Title(name), value, values, setting);
         setting.Value = setting.Validation.Values[index];
     }
 
@@ -489,7 +487,11 @@ internal class ConfigWindow
             if (max != null && value > max.Value) value = max.Value;
             StepInt(ref value, min, max, step);
         }
-        if (previous != value) SetUnsavedChanges();
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
 
         setting.Value = new JsonObject(new JValue(value));
     }
@@ -544,7 +546,11 @@ internal class ConfigWindow
             if (max != null && value > max.Value) value = max.Value;
             StepFloat(ref value, min, max, step);
         }
-        if (previous != value) SetUnsavedChanges();
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
 
         setting.Value = new JsonObject(new JValue(value));
     }
@@ -563,7 +569,11 @@ internal class ConfigWindow
         int value = setting.Value.AsInt();
         int previous = value;
         ImGui.DragInt(Title(name), ref value);
-        if (previous != value) SetUnsavedChanges();
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
         setting.Value = new JsonObject(new JValue(value));
     }
 
@@ -572,7 +582,11 @@ internal class ConfigWindow
         float value = setting.Value.AsFloat();
         float previous = value;
         ImGui.DragFloat(Title(name), ref value);
-        if (previous != value) SetUnsavedChanges();
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
         setting.Value = new JsonObject(new JValue(value));
     }
 
@@ -581,7 +595,11 @@ internal class ConfigWindow
         string value = setting.Value.AsString();
         string previous = value;
         ImGui.InputText(Title(name), ref value, 256);
-        if (previous != value) SetUnsavedChanges();
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
         setting.Value = new JsonObject(new JValue(value));
     }
 
@@ -590,17 +608,25 @@ internal class ConfigWindow
         bool value = setting.Value.AsBool();
         bool previous = value;
         ImGui.Checkbox(Title(name), ref value);
-        if (previous != value) SetUnsavedChanges();
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
         setting.Value = new JsonObject(new JValue(value));
     }
 
-    private int DrawComboBox(string name, string value, string[] values)
+    private int DrawComboBox(string name, string value, string[] values, ConfigSetting setting)
     {
         int index;
         for (index = 0; index < values.Length; index++) if (values[index] == value) break;
         int previous = index;
         ImGui.Combo(name, ref index, values, values.Length);
-        if (previous != index) SetUnsavedChanges();
+        if (previous != index)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
         return index;
     }
 

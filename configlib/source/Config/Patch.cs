@@ -234,7 +234,9 @@ internal partial class AssetPatch
             string setting = (string?)boolValue.Value ?? "";
             setting = Process(setting, context);
 
-            if (config.GetSetting(setting) == null)
+            if (setting == "value") continue;
+
+            /*if (config.GetSetting(setting) == null)
             {
                 _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
                 failed = true;
@@ -245,7 +247,7 @@ internal partial class AssetPatch
                 _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not from 'string' category.");
                 failed = true;
                 continue;
-            }
+            }*/
             _patches.Add(new StringPatch(key, setting, config));
         }
 
@@ -270,7 +272,9 @@ internal partial class AssetPatch
 
             string setting = (string?)boolValue.Value ?? "";
             setting = Process(setting, context);
-            
+
+            if (setting == "value") continue;
+
             if (config.GetSetting(setting) == null)
             {
                 _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
@@ -456,7 +460,7 @@ internal sealed class StringPatch : IValuePatch
     public StringPatch(string path, string value, Config config)
     {
         mPath = new(path);
-        mValue = config.GetSetting(value)?.Value.AsString() ?? "";
+        mValue = config.GetSetting(value)?.Value.AsString() ?? value;
     }
 
     public void Apply(JsonObject asset)

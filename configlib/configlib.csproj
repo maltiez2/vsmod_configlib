@@ -3,7 +3,7 @@
   <PropertyGroup>
     <ModName>Config lib</ModName>
     <GameVersion>1.19.4</GameVersion>
-    <Version>1.2.0</Version>
+    <Version>1.2.2</Version>
     <ModId>configlib</ModId>
     <Description>Configs library with YAML config format and in-game GUI</Description>
     <Side>Universal</Side>
@@ -14,6 +14,7 @@
   <!-- Authors -->
   <ItemGroup>
     <ModInfoAuthors Include="Maltiez" />
+    <ModInfoAuthors Include="Somnium" />
   </ItemGroup>
 
   <!-- Dependencies -->

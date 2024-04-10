@@ -29,6 +29,7 @@ public class ConfigSetting : ISetting
     public string? InGui { get; internal set; }
     public bool Logarithmic { get; internal set; }
     public bool ClientSide { get; internal set; }
+    public bool Hide { get; internal set; }
 
     public event Action<ConfigSetting>? SettingChanged;
 
@@ -39,6 +40,7 @@ public class ConfigSetting : ISetting
         SettingType = settingType;
         YamlCode = yamlCode;
         InGui = yamlCode;
+        Hide = false;
     }
     public ConfigSetting(ConfigSettingPacket settings)
     {
@@ -48,6 +50,7 @@ public class ConfigSetting : ISetting
         MappingKey = settings.MappingKey;
         ClientSide = settings.ClientSide;
         YamlCode = string.Empty;
+        Hide = false;
     }
     private ConfigSetting(ConfigSetting previous)
     {
@@ -63,6 +66,7 @@ public class ConfigSetting : ISetting
         Logarithmic = previous.Logarithmic;
         ClientSide = previous.ClientSide;
         SettingChanged = previous.SettingChanged;
+        Hide = previous.Hide;
     }
 
     internal void Changed() => SettingChanged?.Invoke(this);
@@ -218,7 +222,7 @@ public class ConfigSetting : ISetting
     {
         bool hasDomain = value.Contains(':');
         string langCode = hasDomain ? value : $"{domain}:{value}";
-        return Lang.Get(langCode);
+        return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : value;
     }
     internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain)
     {
@@ -233,7 +237,8 @@ public class ConfigSetting : ISetting
             InGui = json["ingui"].AsString(json["nameInGui"].AsString(json["name"].AsString())),
             ClientSide = json["clientSide"].AsBool(false),
             SortingWeight = json["weight"].AsFloat(0),
-            Logarithmic = json["logarithmic"].AsBool(false)
+            Logarithmic = json["logarithmic"].AsBool(false),
+            Hide = json["hide"].AsBool(false),
         };
 
         if (setting.InGui != null) setting.InGui = Localize(setting.InGui, domain);

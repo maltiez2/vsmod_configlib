@@ -530,7 +530,7 @@ public sealed class Config : IConfig
         float increment = delta;
 
         yaml = new();
-        foreach (ConfigSetting setting in settings)
+        foreach (ConfigSetting setting in settings.Where(setting => !setting.Hide))
         {
             float weight = setting.SortingWeight < 0 ? 0 : setting.SortingWeight;
             if (yaml.ContainsKey(weight))
