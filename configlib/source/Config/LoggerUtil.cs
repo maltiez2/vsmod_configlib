@@ -7,35 +7,31 @@ internal static class LogsUtil
 {
     private const string _prefix = "[Config lib]";
 
-    public static void Notify(ICoreAPI? api, object caller, string format)
-    {
-        api?.Logger?.Notification(Format(caller, format));
-    }
+    public static void Notify(ICoreAPI? api, object caller, string format) => api?.Logger?.Notification(Format(caller, format));
+    public static void Notify(ICoreAPI? api, Type type, string format) => api?.Logger?.Notification(Format(type, format));
 
-    public static void Warn(ICoreAPI? api, object caller, string format)
-    {
-        api?.Logger?.Warning(Format(caller, format));
-    }
+    public static void Warn(ICoreAPI? api, object caller, string format) => api?.Logger?.Warning(Format(caller, format));
+    public static void Warn(ICoreAPI? api, Type type, string format) => api?.Logger?.Warning(Format(type, format));
 
-    public static void Error(ICoreAPI? api, object caller, string format)
-    {
-        api?.Logger?.Error(Format(caller, format));
-    }
+    public static void Error(ICoreAPI? api, object caller, string format) => api?.Logger?.Error(Format(caller, format));
+    public static void Error(ICoreAPI? api, Type type, string format) => api?.Logger?.Error(Format(type, format));
 
-    public static void Debug(ICoreAPI? api, object caller, string format)
-    {
-        api?.Logger?.Debug(Format(caller, format));
-    }
+    public static void Debug(ICoreAPI? api, object caller, string format) => api?.Logger?.Debug(Format(caller, format));
+    public static void Debug(ICoreAPI? api, Type type, string format) => api?.Logger?.Debug(Format(type, format));
 
-    public static void Verbose(ICoreAPI? api, object caller, string format)
-    {
-        api?.Logger?.VerboseDebug(Format(caller, format));
-    }
+    public static void Verbose(ICoreAPI? api, object caller, string format) => api?.Logger?.VerboseDebug(Format(caller, format));
+    public static void Verbose(ICoreAPI? api, Type type, string format) => api?.Logger?.VerboseDebug(Format(type, format));
 
     public static void Dev(ICoreAPI? api, object caller, string format)
     {
 #if DEBUG
         api?.Logger?.Notification(Format(caller, format));
+#endif
+    }
+    public static void Dev(ICoreAPI? api, Type type, string format)
+    {
+#if DEBUG
+        api?.Logger?.Notification(Format(type, format));
 #endif
     }
 
@@ -45,6 +41,16 @@ internal static class LogsUtil
         defaultInterpolatedStringHandler.AppendFormatted(_prefix);
         defaultInterpolatedStringHandler.AppendLiteral(" [");
         defaultInterpolatedStringHandler.AppendFormatted(GetCallerTypeName(caller));
+        defaultInterpolatedStringHandler.AppendLiteral("] ");
+        defaultInterpolatedStringHandler.AppendFormatted(format);
+        return defaultInterpolatedStringHandler.ToStringAndClear().Replace("{", "{{").Replace("}", "}}");
+    }
+    public static string Format(Type type, string format)
+    {
+        DefaultInterpolatedStringHandler defaultInterpolatedStringHandler = new(4, 3);
+        defaultInterpolatedStringHandler.AppendFormatted(_prefix);
+        defaultInterpolatedStringHandler.AppendLiteral(" [");
+        defaultInterpolatedStringHandler.AppendFormatted(GetTypeName(type));
         defaultInterpolatedStringHandler.AppendLiteral("] ");
         defaultInterpolatedStringHandler.AppendFormatted(format);
         return defaultInterpolatedStringHandler.ToStringAndClear().Replace("{", "{{").Replace("}", "}}");

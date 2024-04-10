@@ -372,11 +372,10 @@ public sealed class Config : IConfig
     }
     private static int FromJsonDefinition(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
     {
-        int version = 0;
         settings = new();
 
         bool arrayFormat = json["settings"].IsArray();
-        version = json["version"]?.AsInt(0) ?? 0;
+        int version = json["version"]?.AsInt(0) ?? 0;
 
         if (arrayFormat)
         {
