@@ -386,7 +386,7 @@ public sealed class Config : IConfig
         {
             SettingsFromJson(settings, json, ref version, domain);
 
-            FormattingFromJson(json, out SortedDictionary<float, IConfigBlock> formatting);
+            FormattingFromJson(json, out SortedDictionary<float, IConfigBlock> formatting, domain);
             configBlocks = CombineConfigBlocks(formatting, settings.Values);
         }
 
@@ -446,7 +446,7 @@ public sealed class Config : IConfig
 
         return configBlocks;
     }
-    private static void FormattingFromJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting)
+    private static void FormattingFromJson(JsonObject json, out SortedDictionary<float, IConfigBlock> formatting, string domain)
     {
         formatting = new();
         float delta = 1E-8f;
@@ -456,7 +456,7 @@ public sealed class Config : IConfig
 
         foreach (JsonObject block in json["formatting"].AsArray())
         {
-            IFormattingBlock formattingBlock = ParseBlock(block);
+            IFormattingBlock formattingBlock = ParseBlock(block, domain);
 
             float weight = formattingBlock.SortingWeight;
             if (formatting.ContainsKey(weight))
@@ -467,12 +467,12 @@ public sealed class Config : IConfig
             formatting.Add(weight, formattingBlock);
         }
     }
-    private static IFormattingBlock ParseBlock(JsonObject block)
+    private static IFormattingBlock ParseBlock(JsonObject block, string domain)
     {
         switch (block["type"]?.AsString())
         {
             case "separator":
-                return new Separator(block);
+                return new Separator(block, domain);
         }
 
         return new Blank();
@@ -596,54 +596,33 @@ public sealed class Config : IConfig
             string type = block["type"].AsString();
             weight += 1;
 
-            switch (type)
+            if (type == "separator")
             {
-                case "separator":
-                    IConfigBlock formattingBlock = ParseFormattingBlock(type, block);
-                    configBlocks.Add(weight, formattingBlock);
-                    break;
-                case "boolean":
-                    {
-                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Boolean, domain);
-                        configBlocks.Add(weight, setting);
-                        settings.Add(code, setting);
-                    }
-                    break;
-                case "integer":
-                    {
-                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Integer, domain);
-                        configBlocks.Add(weight, setting);
-                        settings.Add(code, setting);
-                    }
-                    break;
-                case "number":
-                case "float":
-                    {
-                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Float, domain);
-                        configBlocks.Add(weight, setting);
-                        settings.Add(code, setting);
-                    }
-                    break;
-                case "string":
-                    {
-                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.String, domain);
-                        configBlocks.Add(weight, setting);
-                        settings.Add(code, setting);
-                    }
-                    break;
-                case "other":
-                    {
-                        (string code, ConfigSetting setting) = ParseSettingBlock(block, ConfigSettingType.Other, domain);
-                        configBlocks.Add(weight, setting);
-                        settings.Add(code, setting);
-                    }
-                    break;
+                IConfigBlock formattingBlock = ParseFormattingBlock(type, block, domain);
+                configBlocks.Add(weight, formattingBlock);
+                continue;
             }
+
+            ConfigSettingType settingType = type switch
+            {
+                "boolean" => ConfigSettingType.Boolean,
+                "integer" => ConfigSettingType.Integer,
+                "number" => ConfigSettingType.Float,
+                "float" => ConfigSettingType.Float,
+                "string" => ConfigSettingType.String,
+                "other" => ConfigSettingType.Other,
+                _ => ConfigSettingType.None
+            };
+
+            (string code, ConfigSetting setting) = ParseSettingBlock(block, settingType, domain);
+            configBlocks.Add(weight, setting);
+            settings.Add(code, setting);
+            setting.SortingWeight = weight;
         }
     }
-    private static IConfigBlock ParseFormattingBlock(string type, JsonObject block)
+    private static IConfigBlock ParseFormattingBlock(string type, JsonObject block, string domain)
     {
-        IFormattingBlock formattingBlock = ParseBlock(block);
+        IFormattingBlock formattingBlock = ParseBlock(block, domain);
         return formattingBlock;
     }
     private static (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, ConfigSettingType settingType, string domain)

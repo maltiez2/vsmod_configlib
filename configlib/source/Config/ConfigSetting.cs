@@ -128,7 +128,7 @@ public class ConfigSetting : ISetting
     private string AddComments(string yamlToken)
     {
         (string first, string other) = SplitToken(yamlToken);
-        string comment = GetPreComment().Replace("\n", "");
+        string comment = GetPreComment();
         if (comment != "") comment += "\n";
         string inline = GetInlineComment();
         if (inline != "") inline = $" # {inline}";
@@ -142,7 +142,7 @@ public class ConfigSetting : ISetting
     }
     private string GetPreComment()
     {
-        return Comment == null ? "" : $"# {Comment}\n";
+        return Comment == null ? "" : $"# {Comment.Replace("\n", "\n# ")}";
     }
     private string GetInlineComment()
     {

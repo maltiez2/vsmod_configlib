@@ -7,14 +7,14 @@ namespace ConfigLib
     {
         public string OriginPath { get; protected set; }
 
-        private readonly byte[] mData;
-        private readonly AssetLocation mLocation;
+        private readonly byte[] _data;
+        private readonly AssetLocation _location;
 
         public SettingsOrigin(byte[] data, AssetLocation location)
         {
-            mData = data;
-            mLocation = location;
-            OriginPath = mLocation.Path;
+            _data = data;
+            _location = location;
+            OriginPath = _location.Path;
         }
 
         public void LoadAsset(IAsset asset)
@@ -31,7 +31,7 @@ namespace ConfigLib
         {
             List<IAsset> list = new()
             {
-                new Asset(mData, mLocation, this)
+                new Asset(_data, _location, this)
             };
 
             return list;
@@ -41,7 +41,7 @@ namespace ConfigLib
         {
             List<IAsset> list = new()
             {
-                new Asset(mData, mLocation, this)
+                new Asset(_data, _location, this)
             };
 
             return list;
