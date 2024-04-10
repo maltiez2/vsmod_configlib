@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using ProtoBuf;
 using System.Text;
+using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 
@@ -223,8 +224,13 @@ public class ConfigSetting : ISetting
         string langCode = hasDomain ? value : $"{domain}:{value}";
         return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : value;
     }
-    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code)
+    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code, ICoreAPI api)
     {
+        if (!json.KeyExists("default"))
+        {
+            
+        }
+        
         ConfigSetting setting = new(
             yamlCode: json["name"].AsString(code),
             defaultValue: json["default"],
