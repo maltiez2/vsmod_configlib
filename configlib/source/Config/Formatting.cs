@@ -12,19 +12,20 @@ public interface IConfigBlock
 internal interface IFormattingBlock : IConfigBlock
 {
     float SortingWeight { get; }
+    public bool Collapsible { get; }
     string Yaml { get; }
-    void Draw(string id);
+    bool Draw(string id);
 }
 
 internal sealed class Blank : IFormattingBlock
 {
     public float SortingWeight => 0;
-
+    public bool Collapsible => false;
     public string Yaml => "";
 
-    public void Draw(string id)
+    public bool Draw(string id)
     {
-
+        return true;
     }
 }
 
@@ -33,6 +34,7 @@ internal sealed class Separator : IFormattingBlock
     public Separator(JsonObject definition, string domain)
     {
         _weight = definition["weight"].AsFloat(0);
+        _collapsible = definition["collapsible"].AsBool(false);
         _weight = _weight < 0 ? 0 : _weight;
         StringBuilder yaml = new();
         yaml.Append("\n\n");
@@ -60,12 +62,22 @@ internal sealed class Separator : IFormattingBlock
 
     public string Yaml => _yaml;
     public float SortingWeight => _weight;
+    public bool Collapsible => _collapsible;
 
-    public void Draw(string id)
+    public bool Draw(string id)
     {
+        bool collapsed = false;
+        
         if (_title != null)
         {
-            ImGuiNET.ImGui.SeparatorText(_title);
+            if (_collapsible)
+            {
+                collapsed = !ImGuiNET.ImGui.CollapsingHeader($"{_title}##{id}");
+            }
+            else
+            {
+                ImGuiNET.ImGui.SeparatorText(_title);
+            }
         }
         else
         {
@@ -76,11 +88,14 @@ internal sealed class Separator : IFormattingBlock
         {
             ImGuiNET.ImGui.TextWrapped(_text);
         }
+
+        return !collapsed;
     }
 
 
     private readonly string _yaml;
     private readonly float _weight;
+    private readonly bool _collapsible;
     private readonly string? _title;
     private readonly string? _text;
 

@@ -96,6 +96,7 @@ internal class ConfigWindow
     private readonly Style _redButton;
     private readonly Style _greenButton;
     private readonly Style _style;
+    private readonly HashSet<float> _disabledHeaders = new();
 
     private int _currentIndex = 0;
     private long _nextId = 0;
@@ -322,6 +323,11 @@ internal class ConfigWindow
         ImGui.Separator();
         string filter = _settingsFilter == "" ? ".*" : StyleEditor.WildCardToRegular(_settingsFilter);
 
+        
+
+        _disabledHeaders.Clear();
+        float currentHeader = 0;
+        bool hasSettings = false;
         foreach ((float weight, IConfigBlock? block) in config.ConfigBlocks)
         {
             if (
@@ -331,9 +337,51 @@ internal class ConfigWindow
                 )
             )
             {
+                hasSettings = true;
+            }
+
+            if (block is IFormattingBlock formatting && formatting.Collapsible)
+            {
+                if (!hasSettings && currentHeader != 0)
+                {
+                    _disabledHeaders.Add(currentHeader);
+                }
+                currentHeader = weight;
+                hasSettings = false;
+            }
+        }
+        if (!hasSettings && currentHeader != 0)
+        {
+            _disabledHeaders.Add(currentHeader);
+        }
+
+
+        bool collapsed = false;
+        foreach ((float weight, IConfigBlock? block) in config.ConfigBlocks)
+        {
+            if (
+                block is ConfigSetting setting && !collapsed && !setting.Hide && (
+                    StyleEditor.Match(filter, setting.YamlCode) ||
+                    StyleEditor.Match(filter, setting.InGui ?? setting.YamlCode)
+                )
+            )
+            {
                 DrawSetting(setting);
             }
-            if (block is IFormattingBlock formatting) formatting.Draw(weight.ToString());
+            
+            if (block is IFormattingBlock formatting)
+            {
+                if (formatting.Collapsible)
+                {
+                    if (_disabledHeaders.Contains(weight)) ImGui.BeginDisabled();
+                    collapsed = !formatting.Draw(weight.ToString());
+                    if (_disabledHeaders.Contains(weight)) ImGui.EndDisabled();
+                }
+                else
+                {
+                    if (!collapsed) formatting.Draw(weight.ToString());
+                }
+            }
         }
     }
 

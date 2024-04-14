@@ -595,11 +595,14 @@ public sealed class Config : IConfig
             string type = block["type"].AsString();
             weight += 1;
 
-            if (type == "separator")
+            switch (type)
             {
-                IConfigBlock formattingBlock = ParseFormattingBlock(type, block, domain);
-                configBlocks.Add(weight, formattingBlock);
-                continue;
+                case "separator":
+                    IConfigBlock formattingBlock = ParseFormattingBlock(type, block, domain);
+                    configBlocks.Add(weight, formattingBlock);
+                    break;
+                default:
+                    break;
             }
 
             ConfigSettingType settingType = type switch
