@@ -600,7 +600,7 @@ public sealed class Config : IConfig
                 case "separator":
                     IConfigBlock formattingBlock = ParseFormattingBlock(type, block, domain);
                     configBlocks.Add(weight, formattingBlock);
-                    break;
+                    continue;
                 default:
                     break;
             }

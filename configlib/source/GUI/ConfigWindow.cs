@@ -340,7 +340,7 @@ internal class ConfigWindow
                 hasSettings = true;
             }
 
-            if (block is IFormattingBlock formatting && formatting.Collapsible)
+            if (block is IFormattingBlock formatting && (formatting.Collapsible || formatting.StopCollapsible))
             {
                 if (!hasSettings && currentHeader != 0)
                 {
@@ -376,6 +376,11 @@ internal class ConfigWindow
                     if (_disabledHeaders.Contains(weight)) ImGui.BeginDisabled();
                     collapsed = !formatting.Draw(weight.ToString());
                     if (_disabledHeaders.Contains(weight)) ImGui.EndDisabled();
+                }
+                else if (formatting.StopCollapsible)
+                {
+                    collapsed = false;
+                    formatting.Draw(weight.ToString());
                 }
                 else
                 {
