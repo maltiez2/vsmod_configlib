@@ -69,7 +69,7 @@ internal class ConfigWindow
 
         using (new StyleApplier(_style))
         {
-            ImGui.SetNextWindowSizeConstraints(new(500, 600), new(1000, 2000));
+            ImGui.SetNextWindowSizeConstraints(new(600, 600), new(1000, 2000));
             ImGuiWindowFlags flags = ImGuiWindowFlags.MenuBar;
             if (_unsavedChanges) flags |= ImGuiWindowFlags.UnsavedDocument;
 
@@ -163,7 +163,8 @@ internal class ConfigWindow
         FilterMods(StyleEditor.WildCardToRegular(_filter), out string[] domains, out string[] names);
         ImGui.ListBox($"##modslist.configlib", ref _currentIndex, names, domains.Length, 5);
         ImGui.NewLine();
-        ImGui.BeginChild("##configlibdomainconfig", new(0, 0), true, ImGuiWindowFlags.MenuBar);
+        float height = ImGui.GetWindowHeight() - ImGui.GetCursorPosY() - 20;
+        ImGui.BeginChild("##configlibdomainconfig", new(0, height), true, ImGuiWindowFlags.MenuBar);
         if (domains.Length > _currentIndex) DrawDomainTab(domains[_currentIndex]);
         ImGui.EndChild();
     }
