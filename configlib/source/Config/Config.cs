@@ -29,7 +29,7 @@ public sealed class Config : IConfig
             WriteToFile();
             _patches = new(api, this);
         }
-        catch (ConfigLibException exception)
+        catch (Exception exception)
         {
             _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
             _patches = new(api, this);
@@ -53,7 +53,7 @@ public sealed class Config : IConfig
             WriteToFile();
             _patches = new(api, this);
         }
-        catch (ConfigLibException exception)
+        catch (Exception exception)
         {
             _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
             _patches = new(api, this);
@@ -77,7 +77,7 @@ public sealed class Config : IConfig
             _clientSideSettings = _settings;
             _patches = new(api, this);
         }
-        catch (ConfigLibException exception)
+        catch (Exception exception)
         {
             _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
             _patches = new(api, this);
@@ -102,7 +102,7 @@ public sealed class Config : IConfig
             DistributeSettingsBySides(serverSideSettings);
             _patches = new(api, this);
         }
-        catch (ConfigLibException exception)
+        catch (Exception exception)
         {
             _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
             _patches = new(api, this);
@@ -248,7 +248,7 @@ public sealed class Config : IConfig
     private readonly JsonObject _json;
     private readonly ConfigPatches _patches;
     private readonly string _defaultYaml = "";
-    private readonly string _defaultJson = "";
+    private readonly string _defaultJson = "{}";
     private readonly ConfigType _configType = ConfigType.YAML;
 
     private void DistributeSettingsBySides(Dictionary<string, ConfigSetting> serverSideSettings)
@@ -301,26 +301,34 @@ public sealed class Config : IConfig
     #region Files
     private string ReadConfigFile(string defaultConfig)
     {
-        if (Path.Exists(ConfigFilePath))
+        try
         {
-            try
+            if (Path.Exists(ConfigFilePath))
             {
-                using StreamReader outputFile = new(ConfigFilePath);
-                return outputFile.ReadToEnd();
+                try
+                {
+                    using StreamReader outputFile = new(ConfigFilePath);
+                    return outputFile.ReadToEnd();
+                }
+                catch
+                {
+                    _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
+                    using StreamWriter outputFile = new(ConfigFilePath);
+                    outputFile.Write(defaultConfig);
+                }
             }
-            catch
+            else
             {
-                _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
+                _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Creating default settings file: {ConfigFilePath}");
                 using StreamWriter outputFile = new(ConfigFilePath);
                 outputFile.Write(defaultConfig);
             }
         }
-        else
+        catch
         {
-            _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Creating default settings file: {ConfigFilePath}");
-            using StreamWriter outputFile = new(ConfigFilePath);
-            outputFile.Write(defaultConfig);
+            _api.Logger.Debug($"[Config lib] [config domain: {_domain}] Was not able to read/write settings file: {ConfigFilePath}");
         }
+        
 
         return defaultConfig;
     }

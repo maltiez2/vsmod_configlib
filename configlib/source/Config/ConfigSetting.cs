@@ -133,7 +133,8 @@ public class ConfigSetting : ISetting
         if (comment != "") comment += "\n";
         string inline = GetInlineComment();
         if (inline != "") inline = $" # {inline}";
-        return $"{comment}{first}{inline}{other}";
+        string defaultValue = GetDefaultValueComment();
+        return $"{comment}{first}{inline}{defaultValue}{other}";
     }
     private static (string firstLine, string remainder) SplitToken(string token)
     {
@@ -144,6 +145,10 @@ public class ConfigSetting : ISetting
     private string GetPreComment()
     {
         return Comment == null ? "" : $"# {Comment.Replace("\n", "\n# ")}";
+    }
+    private string GetDefaultValueComment()
+    {
+        return $" (default: {DefaultValue}) ";
     }
     private string GetInlineComment()
     {

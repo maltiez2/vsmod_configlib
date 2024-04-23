@@ -393,14 +393,34 @@ internal class ConfigWindow
 
     private void DrawSetting(ConfigSetting setting)
     {
+        string name = setting.InGui ?? setting.YamlCode;
+
         if (!_api.IsSinglePlayer && !setting.ClientSide)
         {
             ImGui.BeginDisabled();
         }
 
+        if (ImGui.Button($"~##{name}"))
+        {
+            
+            if (setting.Validation != null && setting.Validation.Mapping != null)
+            {
+                setting.MappingKey = setting.DefaultValue.AsString();
+                setting.Value = setting.Validation.Mapping[setting.MappingKey].Clone();
+            }
+            else
+            {
+                setting.Value = setting.DefaultValue.Clone();
+            }
+            
+            SetUnsavedChanges();
+        }
+        DrawItemHint($"Reset to default value: {setting.DefaultValue}");
+        ImGui.SameLine();
+
         ImGui.PushItemWidth(300);
 
-        string name = setting.InGui ?? setting.YamlCode;
+        
 
         if (setting.Validation != null)
         {
