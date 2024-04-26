@@ -1,6 +1,7 @@
 ﻿using ConfigLib.Patches;
 using Newtonsoft.Json.Linq;
 using ProtoBuf;
+using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
@@ -15,7 +16,8 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     public IEnumerable<string> Domains => _domains;
     public IConfig? GetConfig(string domain) => GetConfigImpl(domain);
     public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
-    public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, drawDelegate);
+    public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, DrawDelegateWrapper(drawDelegate));
+    public void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, drawDelegate);
 
     public const string ConfigSavedEvent = "configlib:{0}:config-saved";
     public const string ConfigChangedEvent = "configlib:{0}:setting-changed";
@@ -30,11 +32,13 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
 
     internal HashSet<string> GetDomains() => _domains;
     internal Config? GetConfigImpl(string domain) => _configs?.ContainsKey(domain) == true ? _configs[domain] : null;
-    internal Dictionary<string, Action<string, ControlButtons>>? GetCustomConfigs() => _customConfigs;
+    internal Dictionary<string, System.Func<string, ControlButtons, ControlButtons>>? GetCustomConfigs() => _customConfigs;
 
     private readonly Dictionary<string, Config> _configs = new();
     private readonly HashSet<string> _domains = new();
-    private readonly Dictionary<string, Action<string, ControlButtons>> _customConfigs = new();
+    private readonly Dictionary<string, System.Func<string, ControlButtons, ControlButtons>> _customConfigs = new();
+    private readonly List<string> _configJsonFiles = new();
+    
     private GuiManager? _guiManager;
     private ICoreAPI? _api;
     private const string _registryCode = "configlib:configs";
@@ -94,6 +98,15 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         }
 
         base.Dispose();
+    }
+
+    private static System.Func<string, ControlButtons, ControlButtons> DrawDelegateWrapper(Action<string, ControlButtons> callback)
+    {
+        return (domain, buttons) =>
+        {
+            callback(domain, buttons);
+            return new() { Defaults = true, Reload = true, Restore = true, Save = true };
+        };
     }
 
     private void ReloadConfigs(Dictionary<string, Config> configs)

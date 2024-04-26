@@ -34,6 +34,16 @@ public interface IConfigProvider
     /// Second argument provides for each control button in gui if this button is pressed this frame.
     /// </param>
     void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate);
+    /// <summary>
+    /// Registers callback for a mod with given mod id. It is called each frame on drawing GUI window, you can call ImGui widgets functions in it.<br/>
+    /// This callback is provided with control buttons struct which tells what control buttons was pressed in the frame this delegate is called.
+    /// </summary>
+    /// <param name="domain">Mod id of your mod</param>
+    /// <param name="drawDelegate">First argument is id you can pass to your ImGui widgets titles/ids to prevent interference with other widgets inside config window.<br/>
+    /// Second argument provides for each control button in gui if this button is pressed this frame.<br/>
+    /// Returns what buttons should be displayed in the window.
+    /// </param>
+    void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate);
 
     /// <summary>
     /// Fired right after all configs are loaded

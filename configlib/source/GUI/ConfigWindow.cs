@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Datastructures;
 using VSImGui;
+using YamlDotNet.Core.Tokens;
 
 namespace ConfigLib;
 
@@ -15,6 +16,14 @@ public struct ControlButtons
     public bool Defaults { get; set; } = false;
 
     public ControlButtons() { }
+
+    public ControlButtons(bool defaultValue)
+    {
+        Save = defaultValue;
+        Restore = defaultValue;
+        Reload = defaultValue;
+        Defaults = defaultValue;
+    }
 
     public void Reset()
     {
@@ -89,7 +98,7 @@ internal class ConfigWindow
 
     private readonly ICoreClientAPI _api;
     private readonly IEnumerable<string> _domains;
-    private readonly Dictionary<string, Action<string, ControlButtons>> _custom;
+    private readonly Dictionary<string, System.Func<string, ControlButtons, ControlButtons>> _custom;
     private readonly HashSet<string> _mods = new();
     private readonly HashSet<int> _unsavedDomains = new();
     private readonly ConfigLibModSystem _configsSystem;
@@ -101,6 +110,7 @@ internal class ConfigWindow
     private int _currentIndex = 0;
     private long _nextId = 0;
     private ControlButtons _controlButtons = new();
+    private ControlButtons _visibleControlButtons = new(true);
     private bool _unsavedChanges = false;
     private bool _customConfig = false;
     private string _filter = "";
@@ -254,7 +264,7 @@ internal class ConfigWindow
             else
             {
                 if (!_customConfig && !_unsavedDomains.Contains(_currentIndex)) ImGui.BeginDisabled();
-                if (ImGui.MenuItem("Save"))
+                if (_visibleControlButtons.Save && ImGui.MenuItem("Save"))
                 {
                     _controlButtons.Save = true;
                     SaveSettings(domain);
@@ -264,7 +274,7 @@ internal class ConfigWindow
                 DrawItemHint($"Saves changes to config file.");
 
 
-                if (ImGui.MenuItem("Restore"))
+                if (_visibleControlButtons.Restore && ImGui.MenuItem("Restore"))
                 {
                     _controlButtons.Restore = true;
                     RestoreSettings(domain);
@@ -274,7 +284,7 @@ internal class ConfigWindow
 
 
                 if (!_custom.ContainsKey(domain)) ImGui.BeginDisabled();
-                if (ImGui.MenuItem("Reload"))
+                if (_visibleControlButtons.Reload && ImGui.MenuItem("Reload"))
                 {
                     _controlButtons.Reload = true;
                     _confirmDefaults = false;
@@ -283,7 +293,7 @@ internal class ConfigWindow
 
 
                 if (!_custom.ContainsKey(domain)) ImGui.EndDisabled();
-                if (ImGui.MenuItem("Defaults"))
+                if (_visibleControlButtons.Defaults && ImGui.MenuItem("Defaults"))
                 {
                     _confirmDefaults = true;
                 }
@@ -298,6 +308,7 @@ internal class ConfigWindow
             Config? config = _configsSystem.GetConfigImpl(domain);
             if (config != null)
             {
+                _visibleControlButtons = new(true);
                 ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world.");
                 if (!_api.IsSinglePlayer) ImGui.TextDisabled("Only client side settings are available for edit.");
                 ImGui.Separator();
@@ -313,7 +324,7 @@ internal class ConfigWindow
         if (_custom.ContainsKey(domain))
         {
             ImGui.Separator();
-            _custom[domain]?.Invoke($"configlib:{_nextId++}", _controlButtons);
+            _visibleControlButtons = _custom[domain]?.Invoke($"configlib:{_nextId++}", _controlButtons) ?? new(true);
             _customConfig = true;
         }
     }
@@ -323,8 +334,6 @@ internal class ConfigWindow
         ImGui.InputTextWithHint("Search##settings", "filter (supports wildcards)", ref _settingsFilter, 100);
         ImGui.Separator();
         string filter = _settingsFilter == "" ? ".*" : StyleEditor.WildCardToRegular(_settingsFilter);
-
-        
 
         _disabledHeaders.Clear();
         float currentHeader = 0;
