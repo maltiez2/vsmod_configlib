@@ -14,10 +14,11 @@ public sealed class Config : IConfig
     public int Version { get; private set; }
     public event Action<Config>? ConfigSaved;
 
-    public Config(ICoreAPI api, string domain, JsonObject json)
+    public Config(ICoreAPI api, string domain, string modName, JsonObject json)
     {
         _api = api;
         _domain = domain;
+        _modName = modName;
         _json = json;
 
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
@@ -38,10 +39,11 @@ public sealed class Config : IConfig
             _defaultYaml = "";
         }
     }
-    public Config(ICoreAPI api, string domain, JsonObject json, Dictionary<string, ConfigSetting> serverSideSettings)
+    public Config(ICoreAPI api, string domain, string modName, JsonObject json, Dictionary<string, ConfigSetting> serverSideSettings)
     {
         _api = api;
         _domain = domain;
+        _modName = modName;
         _json = json;
 
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
@@ -62,10 +64,11 @@ public sealed class Config : IConfig
             _defaultYaml = "";
         }
     }
-    public Config(ICoreAPI api, string domain, JsonObject json, string file)
+    public Config(ICoreAPI api, string domain, string modName, JsonObject json, string file)
     {
         _api = api;
         _domain = domain;
+        _modName = modName;
         _json = json;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
@@ -86,10 +89,11 @@ public sealed class Config : IConfig
             _defaultYaml = "";
         }
     }
-    public Config(ICoreAPI api, string domain, JsonObject json, string file, Dictionary<string, ConfigSetting> serverSideSettings)
+    public Config(ICoreAPI api, string domain, string modName, JsonObject json, string file, Dictionary<string, ConfigSetting> serverSideSettings)
     {
         _api = api;
         _domain = domain;
+        _modName = modName;
         _json = json;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
@@ -119,6 +123,7 @@ public sealed class Config : IConfig
     internal ConfigType FileType => _configType;
     internal string JsonFilePath { get; } = "";
     internal string Domain => _domain;
+    internal string ModName => _modName;
 
     public ISetting? GetSetting(string code)
     {
@@ -242,6 +247,7 @@ public sealed class Config : IConfig
 
     private readonly ICoreAPI _api;
     private readonly string _domain;
+    private readonly string _modName;
     private readonly Dictionary<string, ConfigSetting> _settings;
     private readonly Dictionary<string, ConfigSetting> _clientSideSettings = new();
     private readonly SortedDictionary<float, IConfigBlock> _configBlocks;
@@ -539,6 +545,8 @@ public sealed class Config : IConfig
                 return new JValue(intValue);
             case ConfigSettingType.String:
                 return new JValue(strValue);
+            case ConfigSettingType.Color:
+                return new JValue(strValue);
             default:
                 return value ?? new JValue(strValue);
         }
@@ -593,6 +601,11 @@ public sealed class Config : IConfig
         {
             ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other, domain);
         }
+
+        if (definition["settings"].KeyExists("color"))
+        {
+            ParseSettingsCategory(definition["settings"]["color"], settings, ConfigSettingType.Color, domain);
+        }
     }
     private void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
     {
@@ -621,6 +634,7 @@ public sealed class Config : IConfig
                 "float" => ConfigSettingType.Float,
                 "string" => ConfigSettingType.String,
                 "other" => ConfigSettingType.Other,
+                "color" => ConfigSettingType.Color,
                 _ => ConfigSettingType.None
             };
 

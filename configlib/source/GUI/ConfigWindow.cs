@@ -1,8 +1,13 @@
 ﻿using ConfigLib.Formatting;
 using ImGuiNET;
 using Newtonsoft.Json.Linq;
+using OpenTK.Core;
+using System.Globalization;
+using System.Numerics;
 using Vintagestory.API.Client;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.MathTools;
 using VSImGui;
 using YamlDotNet.Core.Tokens;
 
@@ -213,7 +218,8 @@ internal class ConfigWindow
     private void FilterMods(string filter, out string[] domains, out string[] names)
     {
         domains = _mods.ToArray();
-        names = _mods.Select((domain) => _api.ModLoader.GetMod(domain).Info.Name).ToArray();
+        names = _mods.Select(GetModName).ToArray();
+
 
         if (filter == "") return;
 
@@ -231,6 +237,23 @@ internal class ConfigWindow
 
         domains = newDomains.ToArray();
         names = newNames.ToArray();
+    }
+
+    private string GetModName(string domain)
+    {
+        string? modName = _configsSystem.GetConfigImpl(domain)?.ModName;
+        if (modName == null)
+        {
+            try
+            {
+                modName = _api.ModLoader.GetMod(domain)?.Info?.Name ?? Lang.Get(domain);
+            }
+            catch
+            {
+                // Dont care
+            }
+        }
+        return modName ?? domain;
     }
 
     private bool _confirmDefaults = false;
@@ -450,6 +473,9 @@ internal class ConfigWindow
                     break;
                 case ConfigSettingType.String:
                     DrawStringSetting(name, setting);
+                    break;
+                case ConfigSettingType.Color:
+                    DrawColorSetting(name, setting);
                     break;
                 default:
                     ImGui.TextDisabled($"{setting.YamlCode}: unavailable");
@@ -686,6 +712,29 @@ internal class ConfigWindow
         setting.Value = new JsonObject(new JValue(value));
     }
 
+    private void DrawColorSetting(string name, ConfigSetting setting)
+    {
+        string value = setting.Value.AsString();
+        string previous = value;
+
+        int red = int.Parse(value.Substring(1, 2), NumberStyles.HexNumber);
+        int green = int.Parse(value.Substring(3, 2), NumberStyles.HexNumber);
+        int blue = int.Parse(value.Substring(5, 2), NumberStyles.HexNumber);
+
+        Vector3 color = new(red / 255f, green / 255f, blue / 255f);
+
+        ImGui.ColorEdit3(Title(name), ref color, ImGuiColorEditFlags.DisplayHex);
+
+        value = ColorUtil.Int2Hex(ColorUtil.ToRgba(255, (int)(color.X * 255), (int)(color.Y * 255), (int)(color.Z * 255)));
+
+        if (previous != value)
+        {
+            SetUnsavedChanges();
+            setting.Changed();
+        }
+        setting.Value = new JsonObject(new JValue(value));
+    }
+
     private void DrawBooleanSetting(string name, ConfigSetting setting)
     {
         bool value = setting.Value.AsBool();
@@ -714,7 +763,7 @@ internal class ConfigWindow
     }
 
     public static void DrawItemHint(string hint)
-    {
+    {        
         if (ImGui.BeginItemTooltip())
         {
             ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35f);

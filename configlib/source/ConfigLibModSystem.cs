@@ -4,6 +4,7 @@ using ProtoBuf;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Server;
 using Vintagestory.API.Util;
@@ -18,6 +19,9 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
     public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, DrawDelegateWrapper(drawDelegate));
     public void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, drawDelegate);
+
+    public event Action? ConfigWindowClosed;
+    public event Action? ConfigWindowOpened;
 
     public const string ConfigSavedEvent = "configlib:{0}:config-saved";
     public const string ConfigChangedEvent = "configlib:{0}:setting-changed";
@@ -127,19 +131,21 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
             }
         }
 
-        ConfigsLoaded?.Invoke();
-
         if (_api is ICoreClientAPI clientApi)
         {
             try
             {
                 _guiManager = new(clientApi);
+                _guiManager.ConfigWindowClosed += () => ConfigWindowClosed?.Invoke();
+                _guiManager.ConfigWindowOpened += () => ConfigWindowOpened?.Invoke();
             }
             catch (Exception exception)
             {
                 clientApi.Logger.Error($"[Config lib] Error on creating GUI manager. Probably missing ImGui or it has incorrect version.\nException:\n{exception}");
             }
         }
+
+        ConfigsLoaded?.Invoke();
     }
     private void LoadConfigs()
     {
@@ -155,8 +161,8 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
             }
             catch (Exception exception)
             {
-                _api.Logger.Error($"[Config lib] Error on loading config for {_api.ModLoader.GetMod(asset.Location.Domain)}.");
-                _api.Logger.VerboseDebug($"[Config lib] Error on loading config for {_api.ModLoader.GetMod(asset.Location.Domain)}.\n{exception}\n");
+                _api.Logger.Error($"[Config lib] Error on loading config for {asset.Location.Domain}.");
+                _api.Logger.VerboseDebug($"[Config lib] Error on loading config for {asset.Location.Domain}.\n{exception}\n");
             }
         }
     }
@@ -173,11 +179,11 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         Config config;
         if (parsedConfig.KeyExists("file"))
         {
-            config = new(_api, domain, parsedConfig, parsedConfig["file"].AsString());
+            config = new(_api, domain, _api.ModLoader.GetMod(domain)?.Info.Name ?? Lang.Get(domain), parsedConfig, parsedConfig["file"].AsString());
         }
         else
         {
-            config = new(_api, domain, parsedConfig);
+            config = new(_api, domain, _api.ModLoader.GetMod(domain)?.Info.Name ?? Lang.Get(domain), parsedConfig);
         }
 
         _configs.Add(domain, config);
@@ -299,6 +305,7 @@ internal class ConfigRegistry : RecipeRegistryBase
         for (int count = 0; count < quantity; count++)
         {
             string domain = reader.ReadString();
+            string modName = reader.ReadString();
             Config.ConfigType fileType = (Config.ConfigType)reader.ReadInt32();
             string jsonFile = reader.ReadString();
             int length = reader.ReadInt32();
@@ -309,11 +316,11 @@ internal class ConfigRegistry : RecipeRegistryBase
 
             if (fileType == Config.ConfigType.JSON)
             {
-                config = new(resolver.Api, packet.Domain, new(JObject.Parse(Asset.BytesToString(packet.Definition))), jsonFile, packet.GetSettings());
+                config = new(resolver.Api, packet.Domain, modName, new(JObject.Parse(Asset.BytesToString(packet.Definition))), jsonFile, packet.GetSettings());
             }
             else
             {
-                config = new(resolver.Api, packet.Domain, new(JObject.Parse(Asset.BytesToString(packet.Definition))), packet.GetSettings());
+                config = new(resolver.Api, packet.Domain, modName, new(JObject.Parse(Asset.BytesToString(packet.Definition))), packet.GetSettings());
             }
 
             _configs[domain] = config;
@@ -333,6 +340,7 @@ internal class ConfigRegistry : RecipeRegistryBase
         foreach ((string domain, Config config) in _configs)
         {
             writer.Write(domain);
+            writer.Write(config.ModName);
             writer.Write((int)config.FileType);
             writer.Write(config.JsonFilePath);
             byte[] configData = SerializerUtil.Serialize(new SettingsPacket(domain, config.Settings, config.Definition));

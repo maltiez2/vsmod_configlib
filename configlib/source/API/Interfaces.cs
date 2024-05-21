@@ -9,6 +9,19 @@ namespace ConfigLib;
 public interface IConfigProvider
 {
     /// <summary>
+    /// Fired when config window is closed
+    /// </summary>
+    event Action? ConfigWindowClosed;
+    /// <summary>
+    /// Fired when config window is opened
+    /// </summary>
+    event Action? ConfigWindowOpened;
+    /// <summary>
+    /// Fired right after all configs are loaded
+    /// </summary>
+    event Action? ConfigsLoaded;
+
+    /// <summary>
     /// Stores domains of all mods that with configs
     /// </summary>
     IEnumerable<string> Domains { get; }
@@ -44,11 +57,6 @@ public interface IConfigProvider
     /// Returns what buttons should be displayed in the window.
     /// </param>
     void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate);
-
-    /// <summary>
-    /// Fired right after all configs are loaded
-    /// </summary>
-    event Action? ConfigsLoaded;
 }
 
 public interface IConfig
@@ -108,7 +116,11 @@ public enum ConfigSettingType
     /// <summary>
     /// Corresponds to arbitrary <see cref="JsonObject"/> values.
     /// </summary>
-    Other
+    Other,
+    /// <summary>
+    /// Color as string in hex format with '#' prefix
+    /// </summary>
+    Color
 }
 
 public interface ISetting : IConfigBlock

@@ -6,6 +6,9 @@ namespace ConfigLib;
 
 internal class GuiManager : IDisposable
 {
+    public event Action? ConfigWindowClosed;
+    public event Action? ConfigWindowOpened;
+
     private readonly ImGuiModSystem _modSystem;
     private readonly ConfigWindow _configWindow;
     private bool _disposed;
@@ -30,7 +33,7 @@ internal class GuiManager : IDisposable
 
         if (!_configWindow.Draw())
         {
-            _showConfig = false;
+            CloseConfigWindow();
             return CallbackGUIStatus.Closed;
         }
 
@@ -60,18 +63,26 @@ internal class GuiManager : IDisposable
 
     public void OpenConfigWindow()
     {
+        if (!_showConfig) ConfigWindowOpened?.Invoke();
         _showConfig = true;
         _modSystem.Show();
     }
     public void CloseConfigWindow()
     {
+        if (_showConfig) ConfigWindowClosed?.Invoke();
         _showConfig = false;
     }
 
     private bool ShowConfigWindow(KeyCombination keyCombination)
     {
-        _showConfig = !_showConfig;
-
+        if (!_showConfig)
+        {
+            OpenConfigWindow();
+        }
+        else
+        {
+            CloseConfigWindow();
+        }
         return true;
     }
 

@@ -134,6 +134,7 @@ public class ConfigSetting : ISetting
         string inline = GetInlineComment();
         if (inline != "") inline = $" # {inline}";
         string defaultValue = GetDefaultValueComment();
+        if (defaultValue != "" && inline == "") defaultValue = $" # {defaultValue}";
         return $"{comment}{first}{inline}{defaultValue}{other}";
     }
     private static (string firstLine, string remainder) SplitToken(string token)

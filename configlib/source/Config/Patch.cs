@@ -236,18 +236,6 @@ internal partial class AssetPatch
 
             if (setting == "value") continue;
 
-            /*if (config.GetSetting(setting) == null)
-            {
-                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': other setting '{setting}' not found.");
-                failed = true;
-                continue;
-            }
-            if (config.GetSetting(setting)?.SettingType != ConfigSettingType.String)
-            {
-                _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not from 'string' category.");
-                failed = true;
-                continue;
-            }*/
             _patches.Add(new StringPatch(key, setting, config));
         }
 
@@ -454,66 +442,66 @@ internal sealed class BooleanPatch : IValuePatch
 }
 internal sealed class StringPatch : IValuePatch
 {
-    private readonly JsonObjectPath mPath;
-    private readonly string mValue;
+    private readonly JsonObjectPath _path;
+    private readonly string _value;
 
     public StringPatch(string path, string value, Config config)
     {
-        mPath = new(path);
-        mValue = config.GetSetting(value)?.Value.AsString() ?? value;
+        _path = new(path);
+        _value = config.GetSetting(value)?.Value.AsString() ?? value;
     }
 
     public void Apply(JsonObject asset)
     {
-        JsonObject? jsonValue = mPath.Get(asset);
-        jsonValue?.Token.Replace(new JValue(mValue));
+        JsonObject? jsonValue = _path.Get(asset);
+        jsonValue?.Token.Replace(new JValue(_value));
     }
 }
 internal sealed class JsonPatch : IValuePatch
 {
-    private readonly JsonObjectPath mPath;
-    private readonly JsonObject? mValue;
+    private readonly JsonObjectPath _path;
+    private readonly JsonObject? _value;
 
     public JsonPatch(string path, string value, Config config)
     {
-        mPath = new(path);
-        mValue = config.GetSetting(value)?.Value;
+        _path = new(path);
+        _value = config.GetSetting(value)?.Value;
     }
 
     public void Apply(JsonObject asset)
     {
-        if (mValue == null) return;
-        JsonObject? jsonValue = mPath.Get(asset);
-        jsonValue?.Token.Replace(mValue.Token);
+        if (_value == null) return;
+        JsonObject? jsonValue = _path.Get(asset);
+        jsonValue?.Token.Replace(_value.Token);
     }
 }
 internal sealed class ConstPatch : IValuePatch
 {
-    private readonly JsonObjectPath mPath;
-    private readonly JsonObject mValue;
+    private readonly JsonObjectPath _path;
+    private readonly JsonObject _value;
 
     public ConstPatch(string path, JsonObject value)
     {
-        mPath = new(path);
-        mValue = value;
+        _path = new(path);
+        _value = value;
     }
 
     public void Apply(JsonObject asset)
     {
-        if (mValue == null) return;
-        JsonObject? jsonValue = mPath.Get(asset);
-        jsonValue?.Token.Replace(mValue.Token);
+        if (_value == null) return;
+        JsonObject? jsonValue = _path.Get(asset);
+        jsonValue?.Token.Replace(_value.Token);
     }
 }
 
 internal sealed class JsonObjectPath
 {
     private delegate JsonObject? PathElement(JsonObject? attribute);
-    private readonly IEnumerable<PathElement> mPath;
+    private readonly IEnumerable<PathElement> _path;
 
     public JsonObjectPath(string path)
     {
-        mPath = path.Split("/").Where(element => element != "").Select(Convert);
+        _path = path.Split("/").Where(element => element != "").Select(Convert);
     }
 
     private PathElement Convert(string element)
@@ -533,7 +521,7 @@ internal sealed class JsonObjectPath
     public JsonObject? Get(JsonObject? tree)
     {
         JsonObject? result = tree;
-        foreach (PathElement element in mPath)
+        foreach (PathElement element in _path)
         {
             result = element.Invoke(result);
             if (result == null) return null;
