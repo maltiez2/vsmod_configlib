@@ -114,13 +114,18 @@ public enum ConfigSettingType
     /// </summary>
     String,
     /// <summary>
+    /// Color as string in hex format with '#' prefix
+    /// </summary>
+    Color,
+    /// <summary>
     /// Corresponds to arbitrary <see cref="JsonObject"/> values.
     /// </summary>
     Other,
     /// <summary>
-    /// Color as string in hex format with '#' prefix
+    /// Hidden setting that just stores constant value for use in patches
     /// </summary>
-    Color
+    Constant
+    
 }
 
 public interface ISetting : IConfigBlock

@@ -4,6 +4,7 @@ using System.Globalization;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
+using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
 namespace ConfigLib;
@@ -403,6 +404,11 @@ public sealed class Config : IConfig
             configBlocks = CombineConfigBlocks(formatting, settings.Values);
         }
 
+        if (json.KeyExists("constants"))
+        {
+            ParseConstants(settings, json["constants"]);
+        }
+
         return version;
     }
     private string ToJson(IEnumerable<ConfigSetting> settings, string defaultJson, bool onlyClientSide = false)
@@ -427,6 +433,23 @@ public sealed class Config : IConfig
         return true;
     }
 
+    private void ParseConstants(Dictionary<string, ConfigSetting> settings, JsonObject constants)
+    {
+        foreach (JToken item in constants.Token)
+        {
+            if (item is not JProperty property)
+            {
+                continue;
+            }
+
+            string code = property.Name;
+            ConfigSetting setting = new(code, new JsonObject(item), ConfigSettingType.Constant)
+            {
+                Hide = true
+            };
+            settings.Add(code, setting);
+        }
+    }
     private SortedDictionary<float, IConfigBlock> CombineConfigBlocks(SortedDictionary<float, IConfigBlock> formatting, IEnumerable<ConfigSetting> settings)
     {
         float delta = 1E-10f;
