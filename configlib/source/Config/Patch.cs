@@ -3,8 +3,8 @@ using SimpleExpressionEngine;
 using System.Text.RegularExpressions;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.Util;
 using Vintagestory.Common;
-using YamlDotNet.Core.Tokens;
 
 namespace ConfigLib;
 
@@ -111,35 +111,67 @@ internal partial class AssetPatch
 
     public (int successful, int failed) Apply(out bool serverSideAsset)
     {
-        JsonObject? asset = RetrieveAsset(out serverSideAsset);
-        if (serverSideAsset) return (0, 0);
-        if (asset == null) return (-1, -1);
+        IEnumerable<(JsonObject? asset, string path)> assets;
+        if (_asset.StartsWith('@'))
+        {
+            assets = RetrieveAssetsByWildcard();
+            serverSideAsset = false;
+        }
+        else
+        {
+            JsonObject? assetValue = RetrieveAsset(out serverSideAsset);
+            assets = new List<(JsonObject? asset, string path)>() { (assetValue, _asset) };
+        }
 
         int count = 0;
 
         foreach (IValuePatch patch in _patches)
         {
-            try
+            foreach ((JsonObject? asset, string path) in assets)
             {
-                patch.Apply(asset);
-            }
-            catch (Exception exception)
-            {
-                _api.Logger.VerboseDebug($"[Config lib] Failed to apply patch to '{_asset}' asset.\nException: {exception}\n");
-                count++;
+                if (asset == null) continue;
+                
+                try
+                {
+                    patch.Apply(asset);
+                }
+                catch (Exception exception)
+                {
+                    _api.Logger.VerboseDebug($"[Config lib] Failed to apply patch to '{path}' asset.\nException: {exception}\n");
+                    count++;
+                }
+
+                StoreAsset(asset, path);
             }
         }
-
-        StoreAsset(asset);
 
         return (_patches.Count - count, count);
     }
 
-    private JsonObject? RetrieveAsset(out bool serverSide)
+    private IEnumerable<(JsonObject? asset, string path)> RetrieveAssetsByWildcard()
+    {
+        string wildcard = _asset.Substring(1, _asset.Length - 1);
+
+        return _api.Assets.GetLocations("")
+            .Where(path => WildcardUtil.Match(wildcard, path.ToString()))
+            .Select(path => path.ToString())
+            .Select(RetrieveAsset)
+            .Where(entry => !entry.serverSide)
+            .Where(entry => entry.asset != null)
+            .Select(entry => (entry.asset, entry.path));
+    }
+
+    private JsonObject? RetrieveAsset(out bool serverSide) => RetrieveAsset(_asset, out serverSide);
+    private (bool serverSide, JsonObject? asset, string path) RetrieveAsset(string path)
+    {
+        JsonObject? asset = RetrieveAsset(path, out bool serverSide);
+        return (serverSide, asset, path);
+    }
+    private JsonObject? RetrieveAsset(string path, out bool serverSide)
     {
         serverSide = false;
 
-        AssetLocation location = new(_asset);
+        AssetLocation location = new(path);
         if (_api.Side == EnumAppSide.Client && _serverSideCategories.Contains(location.Category))
         {
             serverSide = true;
@@ -149,17 +181,15 @@ internal partial class AssetPatch
         IAsset? asset;
         try
         {
-            asset = _api.Assets.Get(_asset);
+            asset = _api.Assets.Get(path);
         }
         catch
         {
-            _api.Logger.Debug($"[Config lib] Asset '{_asset}' not found, skipping it.");
+            _api.Logger.Debug($"[Config lib] Asset '{path}' not found, skipping it.");
             return null;
         }
 
         if (asset == null) return null;
-
-
 
         string json = Asset.BytesToString(asset.Data);
 
@@ -180,9 +210,11 @@ internal partial class AssetPatch
         }
     }
 
-    private void StoreAsset(JsonObject data)
+
+
+    private void StoreAsset(JsonObject data, string path)
     {
-        IAsset? asset = _api.Assets.Get(_asset);
+        IAsset? asset = _api.Assets.Get(path);
         if (asset == null) return;
         asset.Data = System.Text.Encoding.UTF8.GetBytes(data.ToString());
     }
@@ -230,7 +262,7 @@ internal partial class AssetPatch
                 failed = true;
                 continue;
             }
-            
+
             string setting = (string?)boolValue.Value ?? "";
             setting = Process(setting, context);
 
@@ -388,8 +420,12 @@ internal sealed class NumberPatch : IValuePatch
 
     public void Apply(JsonObject asset)
     {
-        JsonObject? jsonValue = _path.Get(asset);
+        IEnumerable<JsonObject> jsonValues = _path.Get(asset);
+        jsonValues.Foreach(ApplyToOne);
+    }
 
+    public void ApplyToOne(JsonObject jsonValue)
+    {
         float previousValue = jsonValue?.AsFloat(0) ?? 0;
 
         if (jsonValue is not null && ((JValue)jsonValue.Token).Value is bool)
@@ -400,7 +436,7 @@ internal sealed class NumberPatch : IValuePatch
         CombinedContext<float, float> context = new(new List<IContext<float, float>> { new ValueContext<float, float>(previousValue), _context });
 
         float value = _value.Evaluate(context);
-        
+
         switch (_returnType)
         {
             case ConfigSettingType.Float:
@@ -428,8 +464,12 @@ internal sealed class BooleanPatch : IValuePatch
 
     public void Apply(JsonObject asset)
     {
-        JsonObject? jsonValue = _path.Get(asset);
+        IEnumerable<JsonObject> jsonValues = _path.Get(asset);
+        jsonValues.Foreach(ApplyToOne);
+    }
 
+    public void ApplyToOne(JsonObject jsonValue)
+    {
         float previousValue = (jsonValue?.AsBool() ?? false) ? 1 : 0;
 
         CombinedContext<float, float> context = new(new List<IContext<float, float>> { _context, new ValueContext<float, float>(previousValue) });
@@ -453,7 +493,11 @@ internal sealed class StringPatch : IValuePatch
 
     public void Apply(JsonObject asset)
     {
-        JsonObject? jsonValue = _path.Get(asset);
+        IEnumerable<JsonObject> jsonValues = _path.Get(asset);
+        jsonValues.Foreach(ApplyToOne);
+    }
+    public void ApplyToOne(JsonObject jsonValue)
+    {
         jsonValue?.Token.Replace(new JValue(_value));
     }
 }
@@ -470,8 +514,12 @@ internal sealed class JsonPatch : IValuePatch
 
     public void Apply(JsonObject asset)
     {
+        IEnumerable<JsonObject> jsonValues = _path.Get(asset);
+        jsonValues.Foreach(ApplyToOne);
+    }
+    public void ApplyToOne(JsonObject jsonValue)
+    {
         if (_value == null) return;
-        JsonObject? jsonValue = _path.Get(asset);
         jsonValue?.Token.Replace(_value.Token);
     }
 }
@@ -488,77 +536,12 @@ internal sealed class ConstPatch : IValuePatch
 
     public void Apply(JsonObject asset)
     {
+        IEnumerable<JsonObject> jsonValues = _path.Get(asset);
+        jsonValues.Foreach(ApplyToOne);
+    }
+    public void ApplyToOne(JsonObject jsonValue)
+    {
         if (_value == null) return;
-        JsonObject? jsonValue = _path.Get(asset);
         jsonValue?.Token.Replace(_value.Token);
-    }
-}
-
-internal sealed class JsonObjectPath
-{
-    private delegate JsonObject? PathElement(JsonObject? attribute);
-    private readonly IEnumerable<PathElement> _path;
-
-    public JsonObjectPath(string path)
-    {
-        _path = path.Split("/").Where(element => element != "").Select(Convert);
-    }
-
-    private PathElement Convert(string element)
-    {
-        if (int.TryParse(element, out int index))
-        {
-            return tree => PathElementByIndex(tree, index);
-        }
-        else
-        {
-            if (element == "-") return tree => PathElementByIndex(tree, -1);
-
-            return tree => PathElementByKey(tree, element);
-        }
-    }
-
-    public JsonObject? Get(JsonObject? tree)
-    {
-        JsonObject? result = tree;
-        foreach (PathElement element in _path)
-        {
-            result = element.Invoke(result);
-            if (result == null) return null;
-        }
-        return result;
-    }
-
-    public bool Set(JsonObject? tree, JsonObject value)
-    {
-        JsonObject? result = Get(tree);
-        if (result == null) return false;
-        result.Token?.Replace(value.Token);
-        return true;
-    }
-
-    private static JsonObject? PathElementByIndex(JsonObject? attribute, int index)
-    {
-        if (attribute?.IsArray() != true) return null;
-
-        if (index == -1 || attribute.AsArray().Length <= index)
-        {
-            (attribute.Token as JArray)?.Add(new JValue(0));
-            index = ((attribute.Token as JArray)?.Count ?? 1) - 1;
-        }
-
-        JsonObject[] jsonArray = attribute.AsArray();
-
-        return jsonArray[index];
-    }
-    private static JsonObject? PathElementByKey(JsonObject? attribute, string key)
-    {
-        if (attribute?.KeyExists(key) == true) return attribute[key];
-
-        if (attribute?.Token is not JObject token) return null;
-
-        token.Add(key, new JValue(0));
-
-        return attribute[key];
     }
 }

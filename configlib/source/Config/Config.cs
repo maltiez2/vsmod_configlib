@@ -297,9 +297,9 @@ public sealed class Config : IConfig
         foreach (ConfigSetting setting in settings.Values)
         {
             JsonObjectPath jsonPath = new(setting.YamlCode);
-            JsonObject? value = jsonPath.Get(jsonConfigObject);
+            IEnumerable<JsonObject> value = jsonPath.Get(jsonConfigObject);
             jsonPath.Set(jsonCopy, setting.Value);
-            setting.Value = value ?? setting.DefaultValue;
+            setting.Value = value.First() ?? setting.DefaultValue;
         }
 
         defaultConfig = jsonCopy.Token.ToString(Newtonsoft.Json.Formatting.Indented);
@@ -427,8 +427,8 @@ public sealed class Config : IConfig
         foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
         {
             JsonObjectPath jsonPath = new(setting.YamlCode);
-            JsonObject? value = jsonPath.Get(jsonConfigObject);
-            setting.Value = value ?? setting.DefaultValue;
+            IEnumerable<JsonObject> value = jsonPath.Get(jsonConfigObject);
+            setting.Value = value.First() ?? setting.DefaultValue;
         }
         return true;
     }

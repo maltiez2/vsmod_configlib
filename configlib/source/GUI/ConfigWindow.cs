@@ -1,7 +1,6 @@
 ﻿using ConfigLib.Formatting;
 using ImGuiNET;
 using Newtonsoft.Json.Linq;
-using OpenTK.Core;
 using System.Globalization;
 using System.Numerics;
 using Vintagestory.API.Client;
@@ -9,7 +8,6 @@ using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using VSImGui;
-using YamlDotNet.Core.Tokens;
 
 namespace ConfigLib;
 
@@ -401,7 +399,7 @@ internal class ConfigWindow
             {
                 DrawSetting(setting);
             }
-            
+
             if (block is IFormattingBlock formatting)
             {
                 if (formatting.Collapsible)
@@ -434,7 +432,7 @@ internal class ConfigWindow
 
         if (ImGui.Button($"~##{name}"))
         {
-            
+
             if (setting.Validation != null && setting.Validation.Mapping != null)
             {
                 setting.MappingKey = setting.DefaultValue.AsString();
@@ -444,7 +442,7 @@ internal class ConfigWindow
             {
                 setting.Value = setting.DefaultValue.Clone();
             }
-            
+
             SetUnsavedChanges();
         }
         DrawItemHint($"Reset to default value: {setting.DefaultValue}");
@@ -452,7 +450,7 @@ internal class ConfigWindow
 
         ImGui.PushItemWidth(300);
 
-        
+
 
         if (setting.Validation != null)
         {
@@ -763,7 +761,7 @@ internal class ConfigWindow
     }
 
     public static void DrawItemHint(string hint)
-    {        
+    {
         if (ImGui.BeginItemTooltip())
         {
             ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35f);
