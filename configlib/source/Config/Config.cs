@@ -443,7 +443,7 @@ public sealed class Config : IConfig
             }
 
             string code = property.Name;
-            ConfigSetting setting = new(code, new JsonObject(item), ConfigSettingType.Constant)
+            ConfigSetting setting = new(code, new JsonObject(property.Value), ConfigSettingType.Constant)
             {
                 Hide = true
             };

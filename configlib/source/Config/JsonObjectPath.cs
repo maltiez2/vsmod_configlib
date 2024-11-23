@@ -97,7 +97,11 @@ internal sealed class JsonObjectPath
 
         foreach (JsonObject attribute in attributes)
         {
-            if (attribute?.KeyExists(key) == true) result.Add(attribute[key]);
+            if (attribute?.KeyExists(key) == true)
+            {
+                result.Add(attribute[key]);
+                continue;
+            }
 
             if (attribute?.Token is not JObject token) continue;
 

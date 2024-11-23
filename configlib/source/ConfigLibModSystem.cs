@@ -172,7 +172,9 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
 
         string domain = asset.Location.Domain;
         byte[] data = asset.Data;
-        string json = System.Text.Encoding.UTF8.GetString(data);
+        data = System.Text.Encoding.Convert(System.Text.Encoding.UTF8, System.Text.Encoding.Unicode, data);
+        string json = System.Text.Encoding.Unicode.GetString(data);
+        //string json = System.Text.Encoding.UTF8.GetString(data);
         JObject token = JObject.Parse(json);
         JsonObject parsedConfig = new(token);
 
