@@ -536,7 +536,7 @@ internal class ConfigWindow
 
     private void DrawValuesSetting(string name, ConfigSetting setting)
     {
-        if (setting.Validation?.Values == null) return;
+        if (setting.Validation?.Values == null || setting.Validation.Values.Count == 0) return;
         string[] values = setting.Validation.Values.Select((value) => value.Token.ToString()).ToArray();
         string value = setting.Value.ToString();
         int index = DrawComboBox(Title(name), value, values, setting);

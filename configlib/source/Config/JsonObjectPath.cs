@@ -4,15 +4,38 @@ using Vintagestory.API.Util;
 
 namespace ConfigLib;
 
+
 internal sealed class JsonObjectPath
 {
-    private delegate IEnumerable<JsonObject> PathElementDelegate(IEnumerable<JsonObject> attribute);
-    private readonly IEnumerable<PathElementDelegate> _path;
-
     public JsonObjectPath(string path)
     {
         _path = path.Split("/").Where(element => element != "").Select(Convert);
     }
+
+    public IEnumerable<JsonObject> Get(JsonObject? tree)
+    {
+        IEnumerable<JsonObject> result = new JsonObject[] { tree };
+        foreach (PathElementDelegate element in _path)
+        {
+            result = element.Invoke(result);
+            if (result == null) return Array.Empty<JsonObject>();
+        }
+        return result;
+    }
+    public int Set(JsonObject? tree, JsonObject value)
+    {
+        IEnumerable<JsonObject> result = Get(tree);
+
+        foreach (JsonObject element in result)
+        {
+            element.Token?.Replace(value.Token);
+        }
+
+        return result.Count();
+    }
+
+    private delegate IEnumerable<JsonObject> PathElementDelegate(IEnumerable<JsonObject> attribute);
+    private readonly IEnumerable<PathElementDelegate> _path;
 
     private PathElementDelegate Convert(string element)
     {
@@ -22,7 +45,7 @@ internal sealed class JsonObjectPath
         }
         else
         {
-            if (element == "-") return tree => PathElementByIndex(tree, -1);
+            if (element == "-") return tree => PathElementByAllIndexes(tree);
 
             PathElementDelegate? rangeResult = TryParseRange(element);
             if (rangeResult != null) return rangeResult;
@@ -34,37 +57,27 @@ internal sealed class JsonObjectPath
         }
     }
 
-    public IEnumerable<JsonObject> Get(JsonObject? tree)
+    private static IEnumerable<JsonObject> PathElementByAllIndexes(IEnumerable<JsonObject> attributes)
     {
-        IEnumerable<JsonObject> result = new JsonObject[] { tree };
-        foreach (PathElementDelegate element in _path)
+        List<JsonObject> result = new();
+        foreach (JsonObject[] attributesArray in attributes.Where(element => element.IsArray()).Select(element => element.AsArray()))
         {
-            result = element.Invoke(result);
-            if (result == null) return null;
+            int size = attributesArray.Length;
+            for (int i = 0; i < size; i++)
+            {
+                result.Add(attributesArray[i]);
+            }
         }
+
         return result;
     }
-    public bool Set(JsonObject? tree, JsonObject value)
-    {
-        IEnumerable<JsonObject> result = Get(tree);
-
-        bool wasSet = false;
-        foreach (JsonObject element in result)
-        {
-            element.Token?.Replace(value.Token);
-            wasSet = true;
-        }
-
-        return wasSet;
-    }
-
     private static IEnumerable<JsonObject> PathElementByIndexes(IEnumerable<JsonObject> attributes, int start, int end)
     {
         List<JsonObject> result = new();
         foreach (JsonObject[] attributesArray in attributes.Where(element => element.IsArray()).Select(element => element.AsArray()))
         {
             int size = attributesArray.Length;
-            for (int i = start; i < Math.Min(end, size); i++)
+            for (int i = Math.Max(0, start); i < Math.Min(end, size); i++)
             {
                 result.Add(attributesArray[i]);
             }
@@ -78,10 +91,9 @@ internal sealed class JsonObjectPath
 
         foreach (JsonObject attribute in attributes.Where(element => element.IsArray()))
         {
-            if (index == -1 || attribute.AsArray().Length <= index)
+            if (index < 0 || attribute.AsArray().Length <= index)
             {
-                (attribute.Token as JArray)?.Add(new JValue(0));
-                index = ((attribute.Token as JArray)?.Count ?? 1) - 1;
+                continue;
             }
 
             JsonObject[] jsonArray = attribute.AsArray();
@@ -102,12 +114,6 @@ internal sealed class JsonObjectPath
                 result.Add(attribute[key]);
                 continue;
             }
-
-            if (attribute?.Token is not JObject token) continue;
-
-            token.Add(key, new JValue(0));
-
-            result.Add(attribute);
         }
 
         return result;
@@ -138,7 +144,7 @@ internal sealed class JsonObjectPath
         if (indexes.Length != 2) return null;
 
         bool parsedStart = int.TryParse(indexes[0], out int start);
-        bool parsedEnd = int.TryParse(indexes[0], out int end);
+        bool parsedEnd = int.TryParse(indexes[1], out int end);
 
         if (!parsedStart || !parsedEnd) return null;
 

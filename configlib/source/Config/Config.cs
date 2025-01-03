@@ -4,7 +4,6 @@ using System.Globalization;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 
 namespace ConfigLib;
@@ -335,7 +334,7 @@ public sealed class Config : IConfig
         {
             _api.Logger.Debug($"[Config lib] [config domain: {_domain}] Was not able to read/write settings file: {ConfigFilePath}");
         }
-        
+
 
         return defaultConfig;
     }
@@ -676,7 +675,7 @@ public sealed class Config : IConfig
     {
         string code = block["code"].AsString();
         ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code, _api);
-        return (code , setting);
+        return (code, setting);
     }
     private void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType, string domain)
     {

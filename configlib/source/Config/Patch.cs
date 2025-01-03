@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using HarmonyLib;
+using Newtonsoft.Json.Linq;
 using SimpleExpressionEngine;
 using System.Text.RegularExpressions;
 using Vintagestory.API.Common;
@@ -116,14 +117,23 @@ internal partial class AssetPatch
         {
             assets = RetrieveAssetsByWildcard();
             serverSideAsset = false;
+
+            _api.Logger.VerboseDebug($"[Config lib] Retrieved {assets.Count()} assets by wildcard '{_asset}'.");
         }
         else
         {
             JsonObject? assetValue = RetrieveAsset(out serverSideAsset);
             assets = new List<(JsonObject? asset, string path)>() { (assetValue, _asset) };
+            if (serverSideAsset) return (0, 0);
+            if (assetValue == null)
+            {
+                _api.Logger.VerboseDebug($"[Config lib] Failed to retrieve asset by path '{_asset}'");
+                return (0, 0);
+            }
         }
 
-        int count = 0;
+        int failedCount = 0;
+        int successfulCount = 0;
 
         foreach (IValuePatch patch in _patches)
         {
@@ -133,19 +143,22 @@ internal partial class AssetPatch
                 
                 try
                 {
-                    patch.Apply(asset);
+                    int pathCount = patch.Apply(asset);
+                    successfulCount += pathCount;
+
+                    _api.Logger.VerboseDebug($"[Config lib] Patched {pathCount} values by path '{patch.Path}'");
                 }
                 catch (Exception exception)
                 {
-                    _api.Logger.VerboseDebug($"[Config lib] Failed to apply patch to '{path}' asset.\nException: {exception}\n");
-                    count++;
+                    _api.Logger.VerboseDebug($"[Config lib] Failed to apply patch by path '{patch.Path}' in asset '{path}'.\nException: {exception}\n");
+                    failedCount++;
                 }
 
                 StoreAsset(asset, path);
             }
         }
 
-        return (_patches.Count - count, count);
+        return (successfulCount, failedCount);
     }
 
     private IEnumerable<(JsonObject? asset, string path)> RetrieveAssetsByWildcard()
@@ -209,8 +222,6 @@ internal partial class AssetPatch
             }
         }
     }
-
-
 
     private void StoreAsset(JsonObject data, string path)
     {
@@ -374,7 +385,8 @@ internal partial class AssetPatch
 
 internal interface IValuePatch
 {
-    void Apply(JsonObject asset);
+    int Apply(JsonObject asset);
+    string Path { get; }
 }
 
 internal sealed class BooleanExpressionSelector
@@ -405,6 +417,8 @@ internal sealed class BooleanExpressionSelector
 
 internal sealed class NumberPatch : IValuePatch
 {
+    public string Path { get; set; }
+
     private readonly JsonObjectPath _path;
     private readonly INode<float, float, float> _value;
     private readonly IContext<float, float> _context;
@@ -413,15 +427,17 @@ internal sealed class NumberPatch : IValuePatch
     public NumberPatch(string path, string formula, IContext<float, float> context, ConfigSettingType type)
     {
         _path = new(path);
+        Path = path;
         _value = MathParser.Parse(formula);
         _context = context;
         _returnType = type;
     }
 
-    public void Apply(JsonObject asset)
+    public int Apply(JsonObject asset)
     {
         IEnumerable<JsonObject> jsonValues = _path.Get(asset);
         jsonValues.Foreach(ApplyToOne);
+        return jsonValues.Count();
     }
 
     public void ApplyToOne(JsonObject jsonValue)
@@ -450,6 +466,8 @@ internal sealed class NumberPatch : IValuePatch
 }
 internal sealed class BooleanPatch : IValuePatch
 {
+    public string Path { get; set; }
+
     private readonly JsonObjectPath _path;
     private readonly INode<float, float, float> _value;
     private readonly IContext<float, float> _context;
@@ -458,14 +476,16 @@ internal sealed class BooleanPatch : IValuePatch
     public BooleanPatch(string path, string formula, IContext<float, float> context)
     {
         _path = new(path);
+        Path = path;
         _value = MathParser.Parse(formula);
         _context = context;
     }
 
-    public void Apply(JsonObject asset)
+    public int Apply(JsonObject asset)
     {
         IEnumerable<JsonObject> jsonValues = _path.Get(asset);
         jsonValues.Foreach(ApplyToOne);
+        return jsonValues.Count();
     }
 
     public void ApplyToOne(JsonObject jsonValue)
@@ -482,19 +502,23 @@ internal sealed class BooleanPatch : IValuePatch
 }
 internal sealed class StringPatch : IValuePatch
 {
+    public string Path { get; set; }
+
     private readonly JsonObjectPath _path;
     private readonly string _value;
 
     public StringPatch(string path, string value, Config config)
     {
         _path = new(path);
+        Path = path;
         _value = config.GetSetting(value)?.Value.AsString() ?? value;
     }
 
-    public void Apply(JsonObject asset)
+    public int Apply(JsonObject asset)
     {
         IEnumerable<JsonObject> jsonValues = _path.Get(asset);
         jsonValues.Foreach(ApplyToOne);
+        return jsonValues.Count();
     }
     public void ApplyToOne(JsonObject jsonValue)
     {
@@ -503,19 +527,23 @@ internal sealed class StringPatch : IValuePatch
 }
 internal sealed class JsonPatch : IValuePatch
 {
+    public string Path { get; set; }
+
     private readonly JsonObjectPath _path;
     private readonly JsonObject? _value;
 
     public JsonPatch(string path, string value, Config config)
     {
         _path = new(path);
+        Path = path;
         _value = config.GetSetting(value)?.Value;
     }
 
-    public void Apply(JsonObject asset)
+    public int Apply(JsonObject asset)
     {
         IEnumerable<JsonObject> jsonValues = _path.Get(asset);
         jsonValues.Foreach(ApplyToOne);
+        return jsonValues.Count();
     }
     public void ApplyToOne(JsonObject jsonValue)
     {
@@ -525,19 +553,23 @@ internal sealed class JsonPatch : IValuePatch
 }
 internal sealed class ConstPatch : IValuePatch
 {
+    public string Path { get; set; }
+
     private readonly JsonObjectPath _path;
     private readonly JsonObject _value;
 
     public ConstPatch(string path, JsonObject value)
     {
         _path = new(path);
+        Path = path;
         _value = value;
     }
 
-    public void Apply(JsonObject asset)
+    public int Apply(JsonObject asset)
     {
         IEnumerable<JsonObject> jsonValues = _path.Get(asset);
         jsonValues.Foreach(ApplyToOne);
+        return jsonValues.Count();
     }
     public void ApplyToOne(JsonObject jsonValue)
     {
