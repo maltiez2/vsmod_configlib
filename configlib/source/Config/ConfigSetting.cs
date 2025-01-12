@@ -30,6 +30,7 @@ public class ConfigSetting : ISetting
     public bool Logarithmic { get; internal set; }
     public bool ClientSide { get; internal set; }
     public bool Hide { get; internal set; }
+    public string Link { get; internal set; }
 
     public event Action<ConfigSetting>? SettingChanged;
 
@@ -67,6 +68,7 @@ public class ConfigSetting : ISetting
         ClientSide = previous.ClientSide;
         SettingChanged = previous.SettingChanged;
         Hide = previous.Hide;
+        Link = previous.Link;
     }
 
     internal void Changed() => SettingChanged?.Invoke(this);
@@ -131,6 +133,7 @@ public class ConfigSetting : ISetting
         (string first, string other) = SplitToken(yamlToken);
         string comment = GetPreComment();
         if (comment != "") comment += "\n";
+        if (Link != "") comment += $"# {Link}\n";
         string inline = GetInlineComment();
         if (inline != "") inline = $" # {inline}";
         string defaultValue = GetDefaultValueComment();
@@ -247,6 +250,7 @@ public class ConfigSetting : ISetting
             SortingWeight = json["weight"].AsFloat(0),
             Logarithmic = json["logarithmic"].AsBool(false),
             Hide = json["hide"].AsBool(false),
+            Link = json["link"].AsString(""),
         };
 
         if (setting.InGui != null) setting.InGui = Localize(setting.InGui, domain);

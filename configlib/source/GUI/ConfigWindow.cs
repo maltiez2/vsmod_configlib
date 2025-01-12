@@ -7,6 +7,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Util;
 using VSImGui;
 
 namespace ConfigLib;
@@ -448,9 +449,13 @@ internal class ConfigWindow
         DrawItemHint($"Reset to default value: {setting.DefaultValue}");
         ImGui.SameLine();
 
+        if (setting.Link != "")
+        {
+            DrawLink(setting, name);
+            ImGui.SameLine();
+        }
+
         ImGui.PushItemWidth(300);
-
-
 
         if (setting.Validation != null)
         {
@@ -482,6 +487,8 @@ internal class ConfigWindow
         }
 
         DrawHint(setting);
+       
+        
         ImGui.PopItemWidth();
 
         if (!_api.IsSinglePlayer && !setting.ClientSide) ImGui.EndDisabled();
@@ -501,6 +508,16 @@ internal class ConfigWindow
 
             ImGui.EndTooltip();
         }
+    }
+
+    private void DrawLink(ConfigSetting setting, string name)
+    {
+        ImGui.SameLine();
+        if (ImGui.Button($"link##{name}"))
+        {
+            _api.Gui.OpenLink(setting.Link);
+        }
+        DrawItemHint($"open in browser: {setting.Link}");
     }
 
     private void DrawValidatedSetting(string name, ConfigSetting setting)

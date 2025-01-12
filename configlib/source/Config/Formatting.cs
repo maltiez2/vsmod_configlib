@@ -1,5 +1,9 @@
-﻿using System.Linq;
+﻿using ImGuiNET;
+using System.Linq;
 using System.Text;
+using System.Xml.Linq;
+using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 
@@ -33,7 +37,7 @@ internal sealed class Blank : IFormattingBlock
 
 internal sealed class Separator : IFormattingBlock
 {
-    public Separator(JsonObject definition, string domain)
+    public Separator(JsonObject definition, string domain, ICoreAPI api)
     {
         _weight = definition["weight"].AsFloat(0);
         _collapsible = definition["collapsible"].AsBool(false);
@@ -61,7 +65,16 @@ internal sealed class Separator : IFormattingBlock
             yaml.Append($"{composed}\n");
         }
 
+        if (definition.KeyExists("link"))
+        {
+            _link = definition["link"].AsString();
+            _linkText = definition["linkText"].AsString(null);
+            if (_linkText != null) _linkText = Localize(_linkText, domain);
+            yaml.Append($"# {_link}\n");
+        }
+
         _yaml = yaml.ToString();
+        _api = api;
     }
 
     public string Yaml => _yaml;
@@ -94,6 +107,25 @@ internal sealed class Separator : IFormattingBlock
             ImGuiNET.ImGui.TextWrapped(_text);
         }
 
+        if (_link != null)
+        {
+            string linkText = _linkText ?? _link;
+
+            if (ImGui.Button($"{linkText}##{id}"))
+            {
+                (_api as ICoreClientAPI)?.Gui.OpenLink(_link);
+            }
+            if (ImGui.BeginItemTooltip())
+            {
+                ImGui.PushTextWrapPos(ImGui.GetFontSize() * 35f);
+                ImGui.TextUnformatted($"open in browser: {_link}");
+                ImGui.PopTextWrapPos();
+
+                ImGui.EndTooltip();
+            }
+            ImGuiNET.ImGui.Separator();
+        }
+
         return !collapsed;
     }
 
@@ -104,6 +136,9 @@ internal sealed class Separator : IFormattingBlock
     private readonly bool _stopCollapsible;
     private readonly string? _title;
     private readonly string? _text;
+    private readonly string? _link;
+    private readonly string? _linkText;
+    private readonly ICoreAPI _api;
 
     private static string Localize(string value, string domain)
     {

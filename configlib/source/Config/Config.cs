@@ -32,7 +32,7 @@ public sealed class Config : IConfig
         }
         catch (Exception exception)
         {
-            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception}.");
             _patches = new(api, this);
             _settings = new();
             _configBlocks = new();
@@ -57,7 +57,7 @@ public sealed class Config : IConfig
         }
         catch (Exception exception)
         {
-            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception}.");
             _patches = new(api, this);
             _settings = new();
             _configBlocks = new();
@@ -82,7 +82,7 @@ public sealed class Config : IConfig
         }
         catch (Exception exception)
         {
-            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception}.");
             _patches = new(api, this);
             _settings = new();
             _configBlocks = new();
@@ -108,7 +108,7 @@ public sealed class Config : IConfig
         }
         catch (Exception exception)
         {
-            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception.Message}.");
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception}.");
             _patches = new(api, this);
             _settings = new();
             _configBlocks = new();
@@ -298,7 +298,7 @@ public sealed class Config : IConfig
             JsonObjectPath jsonPath = new(setting.YamlCode);
             IEnumerable<JsonObject> value = jsonPath.Get(jsonConfigObject);
             jsonPath.Set(jsonCopy, setting.Value);
-            setting.Value = value.First() ?? setting.DefaultValue;
+            setting.Value = value.FirstOrDefault() ?? setting.DefaultValue;
         }
 
         defaultConfig = jsonCopy.Token.ToString(Newtonsoft.Json.Formatting.Indented);
@@ -507,7 +507,7 @@ public sealed class Config : IConfig
         switch (block["type"]?.AsString())
         {
             case "separator":
-                return new Separator(block, domain);
+                return new Separator(block, domain, _api);
         }
 
         return new Blank();
