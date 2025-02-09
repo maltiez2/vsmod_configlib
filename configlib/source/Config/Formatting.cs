@@ -1,7 +1,5 @@
 ﻿using ImGuiNET;
-using System.Linq;
 using System.Text;
-using System.Xml.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -52,7 +50,7 @@ internal sealed class Separator : IFormattingBlock
             string title = Localize(definition["title"].AsString(), domain);
             _title = title;
             int width = title.Length + 6;
-            string line = new string('#', width);
+            string line = new('#', width);
             yaml.Append($"{line}\n## {title} ##\n{line}\n");
         }
 
@@ -85,7 +83,7 @@ internal sealed class Separator : IFormattingBlock
     public bool Draw(string id)
     {
         bool collapsed = false;
-        
+
         if (_title != null)
         {
             if (_collapsible)

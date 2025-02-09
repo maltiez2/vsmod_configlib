@@ -1,5 +1,4 @@
-﻿using HarmonyLib;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using SimpleExpressionEngine;
 using System.Text.RegularExpressions;
 using Vintagestory.API.Common;
@@ -41,7 +40,14 @@ public class ConfigPatches
             try
             {
                 (int successful, int failed) = patch.Apply(out bool serverSide);
-                if (!serverSide && successful >= 0) _api.Logger.Debug($"[Config lib] Values patched: {successful}, failed: {failed} in asset: '{patch.File}'.");
+                if (!serverSide && failed == 0)
+                {
+                    _api.Logger.VerboseDebug($"[Config lib] Values patched: {successful} in asset: '{patch.File}'.");
+                }
+                else
+                {
+                    _api.Logger.VerboseDebug($"[Config lib] Values patched: {successful}, failed: {failed} in asset: '{patch.File}'.");
+                }
             }
             catch (Exception exception)
             {
@@ -140,7 +146,7 @@ internal partial class AssetPatch
             foreach ((JsonObject? asset, string path) in assets)
             {
                 if (asset == null) continue;
-                
+
                 try
                 {
                     int pathCount = patch.Apply(asset);

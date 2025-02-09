@@ -331,8 +331,8 @@ internal class ConfigWindow
             if (config != null)
             {
                 _visibleControlButtons = new(true);
-                ImGui.TextDisabled("To apply changes press 'Save' and re-enter the world.");
-                if (!_api.IsSinglePlayer) ImGui.TextDisabled("Only client side settings are available for edit.");
+                ImGui.Text("To apply changes press 'Save' and re-enter the world.");
+                if (!_api.IsSinglePlayer) ImGui.Text("Only client side settings are available for edit.");
                 ImGui.Separator();
                 DrawModConfig(config);
             }
