@@ -332,7 +332,7 @@ internal class ConfigRegistry : RecipeRegistryBase
 
         ConfigsLoaded?.Invoke(_configs);
     }
-    public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity, FastMemoryStream ms) => ToBytes(resolver, out data, out quantity);
+    //public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity, FastMemoryStream ms) => ToBytes(resolver, out data, out quantity);
     public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity)
     {
         quantity = 0;
