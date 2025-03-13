@@ -451,7 +451,7 @@ internal class ConfigWindow
 
         if (setting.Link != "")
         {
-            DrawLink(setting, name);
+            DrawLink(setting, setting.YamlCode);
             ImGui.SameLine();
         }
 
