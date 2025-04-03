@@ -27,8 +27,8 @@ public class ConfigPatches
             }
             catch (Exception exception)
             {
-                _api.Logger.Debug($"[Config lib] Exception on creating patch to asset: '{filePath}'.");
-                _api.Logger.VerboseDebug($"[Config lib] Exception on creating patch to asset:\n{exception}\n.");
+                _api.Logger.Warning($"[Config lib] Exception on creating patch to asset '{filePath}'.");
+                _api.Logger.VerboseDebug($"[Config lib] Exception on creating patch to asset '{filePath}':\n{exception}\n.");
             }
         }
     }
