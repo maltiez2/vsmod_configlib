@@ -231,7 +231,7 @@ public class ConfigSetting : ISetting
     {
         bool hasDomain = value.Contains(':');
         string langCode = hasDomain ? value : $"{domain}:{value}";
-        return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : value;
+        return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : Lang.Get(value);
     }
     internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code, ICoreAPI api)
     {
