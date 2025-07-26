@@ -7,6 +7,7 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using VSImGui;
 
@@ -332,7 +333,7 @@ internal class ConfigWindow
             {
                 _visibleControlButtons = new(true);
                 ImGui.Text("To apply changes press 'Save' and re-enter the world.");
-                if (!_api.IsSinglePlayer) ImGui.Text("Only client side settings are available for edit.");
+                if (!_api.IsSinglePlayer && !_api.World.Player.HasPrivilege(Privilege.controlserver)) ImGui.Text("Only client side settings are available for edit.");
                 ImGui.Separator();
                 DrawModConfig(config);
             }
@@ -426,7 +427,7 @@ internal class ConfigWindow
     {
         string name = setting.InGui ?? setting.YamlCode;
 
-        if (!_api.IsSinglePlayer && !setting.ClientSide)
+        if (!_api.IsSinglePlayer && !setting.ClientSide && !_api.World.Player.HasPrivilege(Privilege.controlserver))
         {
             ImGui.BeginDisabled();
         }
@@ -446,7 +447,10 @@ internal class ConfigWindow
 
             SetUnsavedChanges();
         }
-        DrawItemHint($"Reset to default value: {setting.DefaultValue}");
+        string hint = "";
+        if (setting.ClientSide) hint += "(client side) ";
+        hint += $"Reset to default value: {setting.DefaultValue}";
+        DrawItemHint(hint);
         ImGui.SameLine();
 
         if (setting.Link != "")
@@ -491,7 +495,7 @@ internal class ConfigWindow
         
         ImGui.PopItemWidth();
 
-        if (!_api.IsSinglePlayer && !setting.ClientSide) ImGui.EndDisabled();
+        if (!_api.IsSinglePlayer && !setting.ClientSide && !_api.World.Player.HasPrivilege(Privilege.controlserver)) ImGui.EndDisabled();
     }
 
     private static void DrawHint(ConfigSetting setting)
@@ -752,7 +756,7 @@ internal class ConfigWindow
 
     private void DrawBooleanSetting(string name, ConfigSetting setting)
     {
-        bool value = setting.Value.AsBool();
+        bool value = setting.Value.AsBool(false);
         bool previous = value;
         ImGui.Checkbox(Title(name), ref value);
         if (previous != value)

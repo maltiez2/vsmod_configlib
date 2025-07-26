@@ -16,13 +16,28 @@ public class ConfigSetting : ISetting
         {
             bool changed = _value.ToString() != value.ToString();
             _value = value;
-            if (changed) SettingChanged?.Invoke(this);
+            if (changed)
+            {
+                ChangedSinceLastSave = true;
+                SettingChanged?.Invoke(this);
+            }
         }
     }
     public JsonObject DefaultValue { get; internal set; }
     public ConfigSettingType SettingType { get; internal set; }
     public string YamlCode { get; internal set; }
-    public string? MappingKey { get; internal set; }
+    public string? MappingKey
+    {
+        get => _mappingKey;
+        set
+        {
+            _mappingKey = value;
+            if (_mappingKey != null && Validation != null && Validation.Mapping != null)
+            {
+                Value = Validation.Mapping[_mappingKey];
+            }
+        }
+    }
     public string? Comment { get; internal set; }
     public Validation? Validation { get; internal set; }
     public float SortingWeight { get; internal set; }
@@ -31,6 +46,7 @@ public class ConfigSetting : ISetting
     public bool ClientSide { get; internal set; }
     public bool Hide { get; internal set; }
     public string Link { get; internal set; }
+    public bool ChangedSinceLastSave { get; internal set; }
 
     public event Action<ConfigSetting>? SettingChanged;
 
@@ -148,7 +164,7 @@ public class ConfigSetting : ISetting
     }
     private string GetPreComment()
     {
-        return Comment == null ? "" : $"# {Comment.Replace("\n", "\n# ")}";
+        return Comment == null ? "" : $"\n# {Comment.Replace("\n", "\n# ")}";
     }
     private string GetDefaultValueComment()
     {
@@ -222,6 +238,8 @@ public class ConfigSetting : ISetting
     #endregion
 
     private JsonObject _value;
+    private string? _mappingKey;
+    
     private static JToken Unwrap(JObject token)
     {
         if (token["value"] is not JToken value) return new JValue("<invalid>");

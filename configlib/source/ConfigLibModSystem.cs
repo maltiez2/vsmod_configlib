@@ -1,7 +1,6 @@
 ﻿using ConfigLib.Patches;
 using Newtonsoft.Json.Linq;
 using ProtoBuf;
-using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -12,7 +11,7 @@ using Vintagestory.Common;
 
 namespace ConfigLib;
 
-public class ConfigLibModSystem : ModSystem, IConfigProvider
+public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 {
     public IEnumerable<string> Domains => _domains;
     public IConfig? GetConfig(string domain) => GetConfigImpl(domain);
@@ -41,13 +40,13 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     private readonly Dictionary<string, Config> _configs = new();
     private readonly HashSet<string> _domains = new();
     private readonly Dictionary<string, System.Func<string, ControlButtons, ControlButtons>> _customConfigs = new();
-    private readonly List<string> _configJsonFiles = new();
-    
+
     private GuiManager? _guiManager;
     private ICoreAPI? _api;
     private const string _registryCode = "configlib:configs";
     private ConfigRegistry? _registry;
     private IClientNetworkChannel? _eventsChannel;
+    private IServerNetworkChannel? _eventsServerChannel;
     private const string _channelName = "configlib:events";
 
     public override void Start(ICoreAPI api)
@@ -61,13 +60,18 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
             PauseMenuPatch.Patch();
             ConfigRegistry.ConfigsLoaded += ReloadConfigs;
             _eventsChannel = (api as ICoreClientAPI)?.Network.RegisterChannel(_channelName)
-                .RegisterMessageType<ConfigEventPacket>();
+                .RegisterMessageType<ConfigEventPacket>()
+                .RegisterMessageType<ServerSideSettingChanged>()
+                .SetMessageHandler<ServerSideSettingChanged>(OnServerSettingChanged);
+
         }
         else
         {
-            (api as ICoreServerAPI)?.Network.RegisterChannel(_channelName)
+            _eventsServerChannel = (api as ICoreServerAPI)?.Network.RegisterChannel(_channelName)
                 .RegisterMessageType<ConfigEventPacket>()
-                .SetMessageHandler<ConfigEventPacket>(SendEvent);
+                .SetMessageHandler<ConfigEventPacket>(SendEvent)
+                .RegisterMessageType<ServerSideSettingChanged>()
+                .SetMessageHandler<ServerSideSettingChanged>(OnServerSettingChanged);
         }
     }
     public override void AssetsLoaded(ICoreAPI api)
@@ -215,6 +219,21 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         string eventName = string.Format(ConfigSavedEvent, config.Domain);
         _api?.Event.PushEvent(eventName, eventDataTree);
         SendEventToServer(eventName, eventDataTree);
+
+        if (_api is ICoreClientAPI clientApi && !clientApi.IsSinglePlayer && clientApi.World.Player.HasPrivilege(Privilege.controlserver))
+        {
+            ServerSideSettingChanged packet = new(config.Domain, config.Settings.Where(setting => setting.Value.ChangedSinceLastSave && !setting.Value.ClientSide).ToDictionary());
+
+            if (packet.Settings.Any())
+            {
+                _eventsChannel?.SendPacket(packet);
+            }
+        }
+
+        foreach ((_, var setting) in config.Settings)
+        {
+            setting.ChangedSinceLastSave = false;
+        }
     }
     private void OnSettingChanged(string domain, string code, ConfigSetting setting)
     {
@@ -276,6 +295,87 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
         string domain = (data as ITreeAttribute)?.GetAsString("domain") ?? "";
         _configs[domain].ReadFromFile();
     }
+    private void OnServerSettingChanged(IServerPlayer player, ServerSideSettingChanged packet)
+    {
+        if (!packet.Settings.Any()) return;
+
+        if (!player.HasPrivilege(Privilege.controlserver))
+        {
+            _api?.Logger.Warning($"[Config lib] Player '{player.PlayerName}' without privilege '{Privilege.controlserver}' tried to change config for mod  '{packet.ConfigDomain}'.");
+            _api?.Logger.Audit($"[Config lib] missing privilege to change config: '{player.PlayerName}' - '{packet.ConfigDomain}'.");
+        }
+
+        Config? config = GetConfigImpl(packet.ConfigDomain);
+
+        if (config == null)
+        {
+            _api?.Logger.Error($"[Config lib] Player '{player.PlayerName}' tried to change config '{packet.ConfigDomain}', but such config does not exist.");
+            return;
+        }
+
+        string settingsChanged = "";
+
+        foreach ((string settingCode, ConfigSettingPacket settingPacket) in packet.Settings)
+        {
+            ConfigSetting settingFromClient = new(settingPacket);
+
+            ConfigSetting? serverSetting = (ConfigSetting?)config.GetSetting(settingCode);
+
+            if (serverSetting == null)
+            {
+                _api?.Logger.Error($"[Config lib] Player '{player.PlayerName}' tried to change setting '{settingCode}' in config for mod '{packet.ConfigDomain}', but such setting does not exist in this config.");
+                continue;
+            }
+
+            if (serverSetting.ClientSide) continue;
+
+            serverSetting.Value = settingFromClient.Value;
+            serverSetting.MappingKey = settingFromClient.MappingKey;
+
+            if (settingsChanged != "") settingsChanged += ", ";
+            settingsChanged += serverSetting.YamlCode;
+        }
+
+        _api?.Logger.Audit($"[Config lib] config changed: '{player.PlayerName}' - {packet.ConfigDomain} - {settingsChanged}");
+        _api?.Logger.Notification($"[Config lib] Player '{player.PlayerName}' changed settings: {settingsChanged}, and saved config file for mod '{_api.ModLoader.GetMod(packet.ConfigDomain)?.Info.Name} ({packet.ConfigDomain})'.");
+
+        config.WriteToFile();
+
+        _eventsServerChannel?.BroadcastPacket(packet, player);
+    }
+    private void OnServerSettingChanged(ServerSideSettingChanged packet)
+    {
+        if (!packet.Settings.Any()) return;
+
+        Config? config = GetConfigImpl(packet.ConfigDomain);
+
+        if (config == null)
+        {
+            return;
+        }
+
+        string settingsChanged = "";
+
+        foreach ((string settingCode, ConfigSettingPacket settingPacket) in packet.Settings)
+        {
+            ConfigSetting settingFromClient = new(settingPacket);
+
+            ConfigSetting? serverSetting = (ConfigSetting?)config.GetSetting(settingCode);
+
+            if (serverSetting == null)
+            {
+                continue;
+            }
+
+            if (serverSetting.ClientSide) continue;
+
+            serverSetting.Value = settingFromClient.Value;
+            serverSetting.MappingKey = settingFromClient.MappingKey;
+
+            if (settingsChanged != "") settingsChanged += ", ";
+            settingsChanged += serverSetting.YamlCode;
+        }
+    }
 
     private void SendEventToServer(string eventName, TreeAttribute eventData)
     {
@@ -295,7 +395,7 @@ public class ConfigLibModSystem : ModSystem, IConfigProvider
     }
 }
 
-internal class ConfigRegistry : RecipeRegistryBase
+internal sealed class ConfigRegistry : RecipeRegistryBase
 {
     public static event Action<Dictionary<string, Config>>? ConfigsLoaded;
 
@@ -332,7 +432,6 @@ internal class ConfigRegistry : RecipeRegistryBase
 
         ConfigsLoaded?.Invoke(_configs);
     }
-    //public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity, FastMemoryStream ms) => ToBytes(resolver, out data, out quantity);
     public override void ToBytes(IWorldAccessor resolver, out byte[] data, out int quantity)
     {
         quantity = 0;
@@ -382,8 +481,8 @@ internal class SettingsPacket
 
     public SettingsPacket(string domain, Dictionary<string, ConfigSetting> settings, JsonObject definition)
     {
-        Dictionary<string, ConfigSettingPacket> serialized = new();
-        foreach ((string key, var value) in settings)
+        Dictionary<string, ConfigSettingPacket> serialized = [];
+        foreach ((string key, ConfigSetting? value) in settings)
         {
             serialized.Add(key, new(value));
         }
@@ -395,11 +494,32 @@ internal class SettingsPacket
 
     public Dictionary<string, ConfigSetting> GetSettings()
     {
-        Dictionary<string, ConfigSetting> deserialized = new();
-        foreach ((string key, var value) in Settings)
+        Dictionary<string, ConfigSetting> deserialized = [];
+        foreach ((string key, ConfigSettingPacket? value) in Settings)
         {
             deserialized.Add(key, new(value));
         }
         return deserialized;
+    }
+}
+
+[ProtoContract(ImplicitFields = ImplicitFields.AllPublic)]
+internal class ServerSideSettingChanged
+{
+    public Dictionary<string, ConfigSettingPacket> Settings { get; set; } = [];
+    public string ConfigDomain { get; set; } = "";
+
+    public ServerSideSettingChanged() { }
+
+    public ServerSideSettingChanged(string domain, Dictionary<string, ConfigSetting> settings)
+    {
+        Dictionary<string, ConfigSettingPacket> serialized = [];
+        foreach ((string key, ConfigSetting? value) in settings)
+        {
+            serialized.Add(key, new(value));
+        }
+
+        Settings = serialized;
+        ConfigDomain = domain;
     }
 }

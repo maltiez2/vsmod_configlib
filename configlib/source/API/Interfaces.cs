@@ -131,6 +131,10 @@ public enum ConfigSettingType
 public interface ISetting : IConfigBlock
 {
     JsonObject Value { get; set; }
+    /// <summary>
+    /// Sets <see cref="Value"/> to corresponding value from mapping on being set.
+    /// </summary>
+    string? MappingKey { get; set; }
     JsonObject DefaultValue { get; }
     ConfigSettingType SettingType { get; }
     string YamlCode { get; }

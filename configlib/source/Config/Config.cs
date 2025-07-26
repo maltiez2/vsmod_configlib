@@ -291,7 +291,18 @@ public sealed class Config : IConfig
         Version = FromJsonDefinition(json, out settings, out configBlocks, domain);
         string jsonConfig = ReadConfigFile(ConfigFilePath);
 
-        JsonObject jsonConfigObject = new(JObject.Parse(jsonConfig));
+        JsonObject jsonConfigObject;
+
+        try
+        {
+            jsonConfigObject = new(JObject.Parse(jsonConfig));
+        }
+        catch (Exception exception)
+        {
+            LogsUtil.Verbose(_api, this, $"Error on parsing config file:\n{exception}\nFile content:\n{jsonConfig}");
+            throw;
+        }
+        
         JsonObject jsonCopy = jsonConfigObject.Clone();
         foreach (ConfigSetting setting in settings.Values)
         {
