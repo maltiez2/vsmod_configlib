@@ -454,8 +454,6 @@ public sealed class Config : IConfig, IDisposable
             return;
         }
 
-        Debug.WriteLine($"\n\n{directory}\n\n");
-
         _configFileWatcher = new(directory);
 
         _configFileWatcher.Changed += FileEventHandler;
