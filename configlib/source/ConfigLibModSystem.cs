@@ -93,6 +93,11 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
             PauseMenuPatch.Patch();
         }
 
+        foreach ((_, Config config) in _configs)
+        {
+            config.Dispose();
+        }
+
         _configs.Clear();
         _domains.Clear();
         _customConfigs.Clear();
@@ -104,6 +109,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         {
             ConfigRegistry.ConfigsLoaded -= ReloadConfigs;
         }
+        _registry = null;
+        _guiManager = null;
 
         base.Dispose();
     }

@@ -1,6 +1,8 @@
 ﻿using ConfigLib.Formatting;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics;
 using System.Globalization;
+using System.Runtime;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
@@ -8,7 +10,7 @@ using YamlDotNet.Serialization;
 
 namespace ConfigLib;
 
-public sealed class Config : IConfig
+public sealed class Config : IConfig, IDisposable
 {
     public string ConfigFilePath { get; private set; }
     public int Version { get; private set; }
@@ -29,6 +31,7 @@ public sealed class Config : IConfig
             _clientSideSettings = _settings;
             WriteToFile();
             _patches = new(api, this);
+            CreateFileWatcher();
         }
         catch (Exception exception)
         {
@@ -54,6 +57,7 @@ public sealed class Config : IConfig
             DistributeSettingsBySides(serverSideSettings);
             WriteToFile();
             _patches = new(api, this);
+            CreateFileWatcher();
         }
         catch (Exception exception)
         {
@@ -79,6 +83,7 @@ public sealed class Config : IConfig
             ParseJson(json, out _settings, out _configBlocks, out _defaultJson, domain);
             _clientSideSettings = _settings;
             _patches = new(api, this);
+            CreateFileWatcher();
         }
         catch (Exception exception)
         {
@@ -105,6 +110,7 @@ public sealed class Config : IConfig
             ParseJson(json, out _settings, out _configBlocks, out _defaultJson, domain);
             DistributeSettingsBySides(serverSideSettings);
             _patches = new(api, this);
+            CreateFileWatcher();
         }
         catch (Exception exception)
         {
@@ -151,11 +157,11 @@ public sealed class Config : IConfig
                 case ConfigType.JSON:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
-                        content = ToJson(_settings.Values, ReadConfigFile(_defaultJson), onlyClientSide: true);
+                        content = ToJson(_settings.Values, ReadConfigFile(_defaultJson, false), onlyClientSide: true);
                     }
                     else
                     {
-                        content = ToJson(_settings.Values, ReadConfigFile(_defaultJson));
+                        content = ToJson(_settings.Values, ReadConfigFile(_defaultJson, false));
                     }
                     break;
             }
@@ -169,11 +175,48 @@ public sealed class Config : IConfig
         }
 
     }
-    public bool ReadFromFile()
+    public bool ReadFromFile() => ReadFromFile(true);
+    public bool ReadFromFile(bool overrideOnFail)
     {
         try
         {
-            string content = ReadConfigFile(_defaultYaml);
+            string content = ReadConfigFile(_defaultYaml, overrideOnFail);
+
+            switch (_configType)
+            {
+                case ConfigType.YAML:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        return FromYaml(_clientSideSettings.Values, content);
+                    }
+                    else
+                    {
+                        return FromYaml(_settings.Values, content);
+                    }
+                case ConfigType.JSON:
+                    if (_api is ICoreClientAPI { IsSinglePlayer: false })
+                    {
+                        return FromJson(_settings.Values, content, onlyClientSide: true);
+                    }
+                    else
+                    {
+                        return FromJson(_settings.Values, content);
+                    }
+            }
+
+            return false;
+        }
+        catch (Exception exception)
+        {
+            _api.Logger.Error($"Exception when trying read YAML file and parse it for'{_domain}' config.\nException: {exception}\n");
+            return false;
+        }
+    }
+    public bool TryReadFromFile()
+    {
+        try
+        {
+            if (!ReadConfigFile(out string content)) return false;
 
             switch (_configType)
             {
@@ -256,6 +299,13 @@ public sealed class Config : IConfig
     private readonly string _defaultYaml = "";
     private readonly string _defaultJson = "{}";
     private readonly ConfigType _configType = ConfigType.YAML;
+    private FileSystemWatcher? _configFileWatcher;
+    private bool _disposedValue;
+    private readonly object _fileChangedLockObject = new();
+    private bool _fileChanged = false; // protected by _fileOperationLockObject
+    private long _fileChangedListener = 0;
+    private const int _fileChangeCheckIntervalMs = 2000;
+
 
     private void DistributeSettingsBySides(Dictionary<string, ConfigSetting> serverSideSettings)
     {
@@ -278,7 +328,7 @@ public sealed class Config : IConfig
     {
         Version = FromJsonDefinition(json, out settings, out configBlocks, domain);
         defaultConfig = ToYaml(settings.Values);
-        string yamlConfig = ReadConfigFile(defaultConfig);
+        string yamlConfig = ReadConfigFile(defaultConfig, true);
         bool valid = FromYaml(settings.Values, yamlConfig);
         if (checkVersion && !valid)
         {
@@ -289,7 +339,7 @@ public sealed class Config : IConfig
     private void ParseJson(JsonObject json, out Dictionary<string, ConfigSetting> settings, out SortedDictionary<float, IConfigBlock> configBlocks, out string defaultConfig, string domain)
     {
         Version = FromJsonDefinition(json, out settings, out configBlocks, domain);
-        string jsonConfig = ReadConfigFile(ConfigFilePath);
+        string jsonConfig = ReadConfigFile("{}", false);
 
         JsonObject jsonConfigObject;
 
@@ -299,7 +349,7 @@ public sealed class Config : IConfig
         }
         catch (Exception exception)
         {
-            LogsUtil.Verbose(_api, this, $"Error on parsing config file:\n{exception}\nFile content:\n{jsonConfig}");
+            LogsUtil.Verbose(_api, this, $"[ParseJson] Error on parsing config file:\n{exception}\nFile content:\n{jsonConfig}");
             throw;
         }
         
@@ -316,7 +366,37 @@ public sealed class Config : IConfig
     }
 
     #region Files
-    private string ReadConfigFile(string defaultConfig)
+    private bool ReadConfigFile(out string config)
+    {
+        config = "";
+
+        try
+        {
+            if (Path.Exists(ConfigFilePath))
+            {
+                try
+                {
+                    using StreamReader outputFile = new(ConfigFilePath);
+                    if (_configFileWatcher != null) _configFileWatcher.EnableRaisingEvents = true;
+                    config = outputFile.ReadToEnd();
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    private string ReadConfigFile(string defaultConfig, bool overrideOnFail)
     {
         try
         {
@@ -325,13 +405,17 @@ public sealed class Config : IConfig
                 try
                 {
                     using StreamReader outputFile = new(ConfigFilePath);
+                    if (_configFileWatcher != null) _configFileWatcher.EnableRaisingEvents = true;
                     return outputFile.ReadToEnd();
                 }
                 catch
                 {
-                    _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
-                    using StreamWriter outputFile = new(ConfigFilePath);
-                    outputFile.Write(defaultConfig);
+                    if (overrideOnFail)
+                    {
+                        _api.Logger.Notification($"[Config lib] [config domain: {_domain}] Was not able to read settings, will create default settings file: {ConfigFilePath}");
+                        using StreamWriter outputFile = new(ConfigFilePath);
+                        outputFile.Write(defaultConfig);
+                    }
                 }
             }
             else
@@ -346,7 +430,6 @@ public sealed class Config : IConfig
             _api.Logger.Debug($"[Config lib] [config domain: {_domain}] Was not able to read/write settings file: {ConfigFilePath}");
         }
 
-
         return defaultConfig;
     }
     private void WriteConfigFile(string content)
@@ -358,7 +441,61 @@ public sealed class Config : IConfig
         }
         catch (Exception exception)
         {
-            _api.Logger.Error($"Exception when trying to deserialize yaml and write it to file for '{_domain}' config.\nException: {exception}\n");
+            _api.Logger.Error($"[Config lib] [config domain: {_domain}] Exception when trying to deserialize yaml and write it to file.\nException: {exception}\n");
+        }
+    }
+    private void CreateFileWatcher()
+    {
+        string? directory = Path.GetDirectoryName(ConfigFilePath);
+
+        if (directory == null)
+        {
+            LogsUtil.Warn(_api, this, $"[config domain: {_domain}] Unable to extract directory from: {ConfigFilePath}");
+            return;
+        }
+
+        Debug.WriteLine($"\n\n{directory}\n\n");
+
+        _configFileWatcher = new(directory);
+
+        _configFileWatcher.Changed += FileEventHandler;
+        _configFileWatcher.Created += FileEventHandler;
+        _configFileWatcher.Filter = Path.GetFileName(ConfigFilePath);
+        _configFileWatcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastWrite;
+        _configFileWatcher.Error += (_, e) => Debug.WriteLine(e.GetException());
+        _configFileWatcher.EnableRaisingEvents = true;
+
+        int initialDelay = Math.Abs(Path.GetFileName(ConfigFilePath).GetHashCode()) % _fileChangeCheckIntervalMs;
+
+        _fileChangedListener = _api.World.RegisterGameTickListener(_ => OnFileChanged(), _fileChangeCheckIntervalMs, initialDelay);
+    }
+    private bool CheckIfFileChanged()
+    {
+        lock (_fileChangedLockObject)
+        {
+            if (!_fileChanged) return false;
+
+            _fileChanged = false;
+            return true;
+        }
+    }
+    private void FileEventHandler(object sender, FileSystemEventArgs eventArgs)
+    {
+        if (eventArgs.ChangeType != WatcherChangeTypes.Changed && eventArgs.ChangeType != WatcherChangeTypes.Created)
+        {
+            return;
+        }
+
+        lock (_fileChangedLockObject)
+        {
+            _fileChanged = true;
+        }
+    }
+    private void OnFileChanged()
+    {
+        if (CheckIfFileChanged())
+        {
+            TryReadFromFile();
         }
     }
     #endregion
@@ -542,16 +679,26 @@ public sealed class Config : IConfig
     }
     private void ValuesFromYaml(out Dictionary<string, JsonObject> values, string yaml)
     {
-        IDeserializer deserializer = new DeserializerBuilder().Build();
-        object? yamlObject = deserializer.Deserialize(yaml);
+        JObject json;
 
-        ISerializer serializer = new SerializerBuilder()
-            .JsonCompatible()
-            .Build();
+        try
+        {
+            IDeserializer deserializer = new DeserializerBuilder().Build();
+            object? yamlObject = deserializer.Deserialize(yaml);
 
-        JObject json = JObject.Parse(serializer.Serialize(yamlObject));
+            ISerializer serializer = new SerializerBuilder()
+                .JsonCompatible()
+                .Build();
 
-        values = new();
+            json = JObject.Parse(serializer.Serialize(yamlObject));
+        }
+        catch (Exception exception)
+        {
+            LogsUtil.Verbose(_api, this, $"[ValuesFromYaml] Error on parsing config file:\n{exception}\nFile content:\n{yaml}");
+            throw;
+        }
+
+        values = [];
         foreach ((string code, JToken? value) in json)
         {
             if (value == null) continue;
@@ -702,5 +849,31 @@ public sealed class Config : IConfig
             settings.Add(code, setting);
         }
     }
+
     #endregion
+
+    private void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            if (disposing)
+            {
+                _configFileWatcher?.Dispose();
+                if (_fileChangedListener != 0)
+                {
+                    _api.World.UnregisterGameTickListener(_fileChangedListener);
+                    _fileChangedListener = 0;
+                }
+            }
+
+            _disposedValue = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
 }
