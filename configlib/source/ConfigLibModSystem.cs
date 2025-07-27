@@ -310,6 +310,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         {
             _api?.Logger.Warning($"[Config lib] Player '{player.PlayerName}' without privilege '{Privilege.controlserver}' tried to change config for mod  '{packet.ConfigDomain}'.");
             _api?.Logger.Audit($"[Config lib] missing privilege to change config: '{player.PlayerName}' - '{packet.ConfigDomain}'.");
+            return;
         }
 
         Config? config = GetConfigImpl(packet.ConfigDomain);
