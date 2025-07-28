@@ -1,5 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using ProtoBuf;
+using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -46,7 +48,10 @@ public class ConfigSetting : ISetting
     public bool ClientSide { get; internal set; }
     public bool Hide { get; internal set; }
     public string Link { get; internal set; }
-    public bool ChangedSinceLastSave { get; internal set; }
+    public bool ChangedSinceLastSave {
+        get;
+        internal set;
+    }
 
     public event Action<ConfigSetting>? SettingChanged;
 
@@ -87,7 +92,7 @@ public class ConfigSetting : ISetting
         Link = previous.Link;
     }
 
-    internal void Changed() => SettingChanged?.Invoke(this);
+    internal void Changed() => Debug.Write("");// SettingChanged?.Invoke(this);
     internal void SetValueFrom(ConfigSetting value)
     {
         Value = value._value.Clone();
@@ -97,6 +102,96 @@ public class ConfigSetting : ISetting
     public static implicit operator ConfigSettingPacket(ConfigSetting setting) => new(setting);
 
     public ConfigSetting Clone() => new(this);
+
+    public bool AssignSettingValue(object target)
+    {
+        Type targetType = target.GetType();
+
+        IEnumerable<(string code, FieldInfo field)> fields = targetType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Select(field => (NormalizeName(field.Name), field));
+        IEnumerable<(string code, PropertyInfo field)> properties = targetType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(property => property.CanWrite).Select(property => (NormalizeName(property.Name), property));
+
+        return AssignSettingValue(target, fields, properties);
+    }
+    internal bool AssignSettingValue(object target, IEnumerable<(string code, FieldInfo field)> fields, IEnumerable<(string code, PropertyInfo field)> properties)
+    {
+        string code = NormalizeName(YamlCode);
+
+        bool anyAssigned = false;
+
+        foreach ((_, FieldInfo? field) in fields.Where(entry => entry.code == code))
+        {
+            if (AssignSettingValue(target, field))
+            {
+                anyAssigned = true;
+            }
+        }
+
+        foreach ((_, PropertyInfo? field) in properties.Where(entry => entry.code == code))
+        {
+            if (AssignSettingValue(target, field))
+            {
+                anyAssigned = true;
+            }
+        }
+
+        return anyAssigned;
+    }
+
+    internal static string NormalizeName(string name) => name.ToLowerInvariant().Replace("_", "");
+    private bool AssignSettingValue(object target, PropertyInfo? property)
+    {
+        if (property != null && property.CanWrite)
+        {
+            switch (SettingType)
+            {
+                case ConfigSettingType.Boolean:
+                    property.SetValue(target, Value.AsBool());
+                    break;
+                case ConfigSettingType.Float:
+                    property.SetValue(target, Value.AsFloat());
+                    break;
+                case ConfigSettingType.Integer:
+                    property.SetValue(target, Value.AsInt());
+                    break;
+                case ConfigSettingType.String:
+                    property.SetValue(target, Value.AsString());
+                    break;
+                case ConfigSettingType.Other:
+                    property.SetValue(target, Value.ToAttribute());
+                    break;
+            }
+            return true;
+        }
+
+        return false;
+    }
+    private bool AssignSettingValue(object target, FieldInfo? field)
+    {
+        if (field != null)
+        {
+            switch (SettingType)
+            {
+                case ConfigSettingType.Boolean:
+                    field.SetValue(target, Value.AsBool());
+                    break;
+                case ConfigSettingType.Float:
+                    field.SetValue(target, Value.AsFloat());
+                    break;
+                case ConfigSettingType.Integer:
+                    field.SetValue(target, Value.AsInt());
+                    break;
+                case ConfigSettingType.String:
+                    field.SetValue(target, Value.AsString());
+                    break;
+                case ConfigSettingType.Other:
+                    field.SetValue(target, Value.ToAttribute());
+                    break;
+            }
+            return true;
+        }
+
+        return false;
+    }
 
     internal string ToYaml()
     {
@@ -239,7 +334,7 @@ public class ConfigSetting : ISetting
 
     private JsonObject _value;
     private string? _mappingKey;
-    
+
     private static JToken Unwrap(JObject token)
     {
         if (token["value"] is not JToken value) return new JValue("<invalid>");

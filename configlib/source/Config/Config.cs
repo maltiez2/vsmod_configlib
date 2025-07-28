@@ -1,11 +1,14 @@
 ﻿using ConfigLib.Formatting;
 using Newtonsoft.Json.Linq;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime;
+using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
+using Vintagestory.API.Util;
 using YamlDotNet.Serialization;
 
 namespace ConfigLib;
@@ -14,7 +17,10 @@ public sealed class Config : IConfig, IDisposable
 {
     public string ConfigFilePath { get; private set; }
     public int Version { get; private set; }
+
     public event Action<Config>? ConfigSaved;
+
+    public event Action<ISetting>? SettingChanged;
 
     public Config(ICoreAPI api, string domain, string modName, JsonObject json)
     {
@@ -32,6 +38,7 @@ public sealed class Config : IConfig, IDisposable
             WriteToFile();
             _patches = new(api, this);
             CreateFileWatcher();
+            SubscribeToSettingsChanges();
         }
         catch (Exception exception)
         {
@@ -58,6 +65,7 @@ public sealed class Config : IConfig, IDisposable
             WriteToFile();
             _patches = new(api, this);
             CreateFileWatcher();
+            SubscribeToSettingsChanges();
         }
         catch (Exception exception)
         {
@@ -84,6 +92,7 @@ public sealed class Config : IConfig, IDisposable
             _clientSideSettings = _settings;
             _patches = new(api, this);
             CreateFileWatcher();
+            SubscribeToSettingsChanges();
         }
         catch (Exception exception)
         {
@@ -111,6 +120,35 @@ public sealed class Config : IConfig, IDisposable
             DistributeSettingsBySides(serverSideSettings);
             _patches = new(api, this);
             CreateFileWatcher();
+            SubscribeToSettingsChanges();
+        }
+        catch (Exception exception)
+        {
+            _api.Logger.Error($"[Config lib] ({domain}) Error on parsing config: {exception}.");
+            _patches = new(api, this);
+            _settings = new();
+            _configBlocks = new();
+            _defaultYaml = "";
+        }
+    }
+    public Config(ICoreAPI api, string domain, string modName, object configObject, string file)
+    {
+        _api = api;
+        _domain = domain;
+        _modName = modName;
+        _json = DefinitionFromObject(configObject, domain);
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
+        JsonFilePath = ConfigFilePath;
+        _configType = ConfigType.JSON;
+
+        try
+        {
+            ParseJson(_json, out _settings, out _configBlocks, out _defaultJson, domain);
+            _clientSideSettings = _settings;
+            _patches = new(api, this);
+            WriteToFile();
+            CreateFileWatcher();
+            SubscribeToSettingsChanges();
         }
         catch (Exception exception)
         {
@@ -244,7 +282,7 @@ public sealed class Config : IConfig, IDisposable
         }
         catch (Exception exception)
         {
-            _api.Logger.Error($"Exception when trying read YAML file and parse it for'{_domain}' config.\nException: {exception}\n");
+            _api.Logger.Error($"Exception when trying read '{_configType}' file and parse it for'{_domain}' config.\nException: {exception}\n");
             return false;
         }
     }
@@ -281,6 +319,60 @@ public sealed class Config : IConfig, IDisposable
             _api.Logger.Error($"Exception when trying to restore settings to defaults for '{_domain}' config.\nException: {exception}\n");
         }
     }
+    public void AssignSettingsValues(object target)
+    {
+        Type targetType = target.GetType();
+
+        IEnumerable<(string code, FieldInfo field)> fields = targetType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Select(field => (ConfigSetting.NormalizeName(field.Name), field));
+        IEnumerable<(string code, PropertyInfo field)> properties = targetType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(property => property.CanWrite).Select(property => (ConfigSetting.NormalizeName(property.Name), property));
+
+        foreach ((_, ConfigSetting? setting) in _settings)
+        {
+            try
+            {
+                setting.AssignSettingValue(target, fields, properties);
+            }
+            catch (Exception exception)
+            {
+                LogsUtil.Error(_api, this, $"Exception on assigning value for setting '{setting.YamlCode}' for config '{_domain}'.\nException: {exception}");
+            }
+        }
+    }
+    public void SyncFromServer(Config config, bool isSinglePlayer)
+    {
+        if (isSinglePlayer)
+        {
+            foreach ((string code, ConfigSetting setting) in _settings)
+            {
+                bool serverSide = config.Settings.ContainsKey(code) && !config.Settings[code].ClientSide;
+
+                if (serverSide)
+                {
+                    _settings[code].SetValueFrom(config.Settings[code]);
+                }
+            }
+        }
+        else
+        {
+            _clientSideSettings.Clear();
+
+            foreach ((string code, ConfigSetting setting) in _settings)
+            {
+                bool serverSide = config.Settings.ContainsKey(code) && !config.Settings[code].ClientSide;
+
+                if (serverSide)
+                {
+                    _clientSideSettings.Add(code, setting.Clone());
+                    _settings[code].SetValueFrom(config.Settings[code]);
+                }
+                else
+                {
+                    _clientSideSettings.Add(code, setting);
+                }
+            }
+        }
+    }
+
 
     internal enum ConfigType
     {
@@ -306,7 +398,13 @@ public sealed class Config : IConfig, IDisposable
     private long _fileChangedListener = 0;
     private const int _fileChangeCheckIntervalMs = 2000;
 
-
+    private void SubscribeToSettingsChanges()
+    {
+        foreach ((_, ConfigSetting? setting) in _settings)
+        {
+            setting.SettingChanged += setting => SettingChanged?.Invoke(setting);
+        }
+    }
     private void DistributeSettingsBySides(Dictionary<string, ConfigSetting> serverSideSettings)
     {
         foreach ((string code, ConfigSetting setting) in _settings)
@@ -352,7 +450,7 @@ public sealed class Config : IConfig, IDisposable
             LogsUtil.Verbose(_api, this, $"[ParseJson] Error on parsing config file:\n{exception}\nFile content:\n{jsonConfig}");
             throw;
         }
-        
+
         JsonObject jsonCopy = jsonConfigObject.Clone();
         foreach (ConfigSetting setting in settings.Values)
         {
@@ -363,6 +461,220 @@ public sealed class Config : IConfig, IDisposable
         }
 
         defaultConfig = jsonCopy.Token.ToString(Newtonsoft.Json.Formatting.Indented);
+    }
+    private JsonObject DefinitionFromObject(object configObject, string domain)
+    {
+        Type configObjectType = configObject.GetType();
+        MemberInfo[] members = configObjectType.GetMembers(BindingFlags.Public | BindingFlags.Instance);
+        MemberInfo[] staticMembers = configObjectType.GetMembers(BindingFlags.Public | BindingFlags.Static);
+
+        JObject root = [];
+        JArray settings = [];
+        root.Add("settings", settings);
+
+        foreach (MemberInfo member in staticMembers)
+        {
+            if (member.Name.ToLowerInvariant() != "version")
+            {
+                continue;
+            }
+
+            int? value = (int?)((member as PropertyInfo)?.GetValue(configObject) ?? (member as FieldInfo)?.GetValue(configObject));
+            if (value != null)
+            {
+                root.Add("version", value.Value);
+            }
+        }
+
+        foreach (MemberInfo member in members)
+        {
+            if (SettingDefinitionFromObject(member, configObject, domain, out JObject definition))
+            {
+                settings.Add(definition);
+            }
+        }
+
+        return new JsonObject(root);
+    }
+    private static bool SettingDefinitionFromObject(MemberInfo info, object configObject, string domain, out JObject definition)
+    {
+        definition = [];
+
+        ConfigSettingType settingType = GetSettingType(info);
+
+        if (settingType == ConfigSettingType.None) return false;
+
+        string code = info.Name;
+
+        definition.Add("code", code);
+        definition.Add("ingui", $"{domain}:setting-{code}");
+        definition.Add("type", settingType.ToString().ToLowerInvariant());
+        definition.Add("default", GetDefaultValue(info, configObject, settingType));
+
+        DescriptionAttribute? description = info.GetCustomAttribute<DescriptionAttribute>();
+        if (description != null)
+        {
+            definition.Add("comment", description.Description);
+        }
+
+        CategoryAttribute? category = info.GetCustomAttribute<CategoryAttribute>();
+        if (category != null)
+        {
+            IEnumerable<string> tags = category.Category.Replace(" ", "").Split(',').Select(tag => tag.Replace("_", "").ToLowerInvariant());
+
+            foreach (string tag in tags)
+            {
+                switch (tag)
+                {
+                    case "clientside":
+                        definition.Add("clientSide", true);
+                        break;
+                    case "logarithmic":
+                        definition.Add("logarithmic", true);
+                        break;
+                }
+            }
+        }
+
+        switch (settingType)
+        {
+            case ConfigSettingType.Float:
+                SetFloatSettingDefinition(info, definition);
+                break;
+            case ConfigSettingType.Integer:
+                SetIntegerSettingDefinition(info, definition);
+                break;
+            case ConfigSettingType.String:
+                SetStringSettingDefinition(info, definition);
+                break;
+            default:
+                break;
+        }
+
+        return true;
+    }
+    private static ConfigSettingType GetSettingType(MemberInfo info)
+    {
+        Type? valueType = (info as PropertyInfo)?.PropertyType ?? (info as FieldInfo)?.FieldType;
+
+        if (valueType == null) return ConfigSettingType.None;
+
+        if (valueType.IsEnum)
+        {
+            return ConfigSettingType.Integer;
+        }
+        else if (valueType == typeof(float) || valueType == typeof(double))
+        {
+            return ConfigSettingType.Float;
+        }
+        else if (valueType == typeof(string))
+        {
+            return ConfigSettingType.String;
+        }
+        else if (valueType == typeof(bool))
+        {
+            return ConfigSettingType.Boolean;
+        }
+        else if (
+            valueType == typeof(int) ||
+            valueType == typeof(long) ||
+            valueType == typeof(short) ||
+            valueType == typeof(uint) ||
+            valueType == typeof(ulong) ||
+            valueType == typeof(ushort))
+        {
+            return ConfigSettingType.Integer;
+        }
+
+        return ConfigSettingType.None;
+    }
+    private static JValue GetDefaultValue(MemberInfo info, object configObject, ConfigSettingType settingType)
+    {
+        DefaultValueAttribute? attribute = info.GetCustomAttribute<DefaultValueAttribute>();
+        object? value = attribute?.Value ?? (info as PropertyInfo)?.GetValue(configObject) ?? (info as FieldInfo)?.GetValue(configObject);
+
+        if (value == null) return new(value);
+
+        return settingType switch
+        {
+            ConfigSettingType.Boolean => new JValue((bool)value),
+            ConfigSettingType.Float => new JValue((float)value),
+            ConfigSettingType.Integer => new JValue((int)value),
+            ConfigSettingType.String => new JValue((string)value),
+            _ => new(value)
+        };
+    }
+    private static void SetFloatSettingDefinition(MemberInfo info, JObject definition)
+    {
+        RangeAttribute? rangeAttribute = info.GetCustomAttribute<RangeAttribute>();
+        if (rangeAttribute != null)
+        {
+            JObject range = new()
+            {
+                { "min", Convert.ToSingle(rangeAttribute.Minimum) },
+                { "max", Convert.ToSingle(rangeAttribute.Maximum) }
+            };
+            definition.Add("range", range);
+        }
+
+        AllowedValuesAttribute? allowedValuesAttribute = info.GetCustomAttribute<AllowedValuesAttribute>();
+        if (allowedValuesAttribute != null)
+        {
+            IEnumerable<float> allowedValues = allowedValuesAttribute.Values.Select(Convert.ToSingle);
+            JArray values = new(allowedValues);
+            definition.Add("values", values);
+        }
+    }
+    private static void SetIntegerSettingDefinition(MemberInfo info, JObject definition)
+    {
+        RangeAttribute? rangeAttribute = info.GetCustomAttribute<RangeAttribute>();
+        if (rangeAttribute != null)
+        {
+            JObject range = new()
+            {
+                { "min", Convert.ToInt32(rangeAttribute.Minimum) },
+                { "max", Convert.ToInt32(rangeAttribute.Maximum) }
+            };
+            definition.Add("range", range);
+        }
+
+        Type? valueType = (info as PropertyInfo)?.PropertyType ?? (info as FieldInfo)?.FieldType;
+        if (valueType?.IsEnum == true)
+        {
+            string[] enumNames = valueType.GetEnumNames();
+            int[] enumValues = (int[])valueType.GetEnumValues();
+
+            if (enumNames.Length == enumValues.Length)
+            {
+                JObject mapping = [];
+                for (int index = 0; index < enumNames.Length; index++)
+                {
+                    mapping.Add(enumNames[index], enumValues[index]);
+                }
+                definition.Add("mapping", mapping);
+                int indexClamped = Math.Max(enumValues.IndexOf(definition["default"]?.Value<int>() ?? 0), 0);
+                definition.Remove("default");
+                definition.Add("default", enumNames[indexClamped]);
+            }
+        }
+
+        AllowedValuesAttribute? allowedValuesAttribute = info.GetCustomAttribute<AllowedValuesAttribute>();
+        if (allowedValuesAttribute != null)
+        {
+            IEnumerable<int> allowedValues = allowedValuesAttribute.Values.Select(Convert.ToInt32);
+            JArray values = new(allowedValues);
+            definition.Add("values", values);
+        }
+    }
+    private static void SetStringSettingDefinition(MemberInfo info, JObject definition)
+    {
+        AllowedValuesAttribute? allowedValuesAttribute = info.GetCustomAttribute<AllowedValuesAttribute>();
+        if (allowedValuesAttribute != null)
+        {
+            IEnumerable<string> allowedValues = allowedValuesAttribute.Values.Select(Convert.ToString);
+            JArray values = new(allowedValues);
+            definition.Add("values", values);
+        }
     }
 
     #region Files
@@ -562,7 +874,22 @@ public sealed class Config : IConfig, IDisposable
         foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
         {
             JsonObjectPath jsonPath = new(setting.YamlCode);
-            jsonPath.Set(config, setting.Value);
+            if (setting.Validation?.Mapping == null)
+            {
+                int count = jsonPath.Set(config, setting.Value);
+                if (count == 0 && !setting.YamlCode.Contains('\\'))
+                {
+                    (config.Token as JObject)?.Add(setting.YamlCode, setting.Value.Token);
+                }
+            }
+            else
+            {
+                int count = jsonPath.Set(config, new(new JValue(setting.MappingKey)));
+                if (count == 0 && !setting.YamlCode.Contains('\\'))
+                {
+                    (config.Token as JObject)?.Add(setting.YamlCode, setting.MappingKey);
+                }
+            }
         }
         return config.Token.ToString(Newtonsoft.Json.Formatting.Indented);
     }
@@ -572,8 +899,23 @@ public sealed class Config : IConfig, IDisposable
         foreach (ConfigSetting setting in settings.Where(item => !onlyClientSide || item.ClientSide))
         {
             JsonObjectPath jsonPath = new(setting.YamlCode);
-            IEnumerable<JsonObject> value = jsonPath.Get(jsonConfigObject);
-            setting.Value = value.First() ?? setting.DefaultValue;
+            IEnumerable<JsonObject> values = jsonPath.Get(jsonConfigObject);
+
+            JsonObject value = values.FirstOrDefault((JsonObject?)null) ?? setting.DefaultValue;
+
+            if (setting.Validation?.Mapping == null)
+            {
+                //JToken converted = ConvertValue(value.Token, setting.SettingType);
+                setting.Value = value; // new(converted);
+                continue;
+            }
+
+            string key = value.AsString("");
+            if (setting.Validation?.Mapping?.ContainsKey(key) == true)
+            {
+                setting.Value = setting.Validation.Mapping[key];
+                setting.MappingKey = key;
+            }
         }
         return true;
     }

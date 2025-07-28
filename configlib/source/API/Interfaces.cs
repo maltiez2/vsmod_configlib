@@ -57,6 +57,10 @@ public interface IConfigProvider
     /// Returns what buttons should be displayed in the window.
     /// </param>
     void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate);
+    /// <summary>
+    /// Fired when a setting in a config changed. Action arguments: domain, config, setting.
+    /// </summary>
+    event Action<string, IConfig, ISetting>? SettingChanged;
 }
 
 public interface IConfig
@@ -69,7 +73,6 @@ public interface IConfig
     /// Version of loaded config file.<br/>In multiplayer on client is equal to version of client side config.
     /// </summary>
     public int Version { get; }
-
     /// <summary>
     /// Writes current config into file.<br/>In multiplayer on client updates only client side settings and write to file on client side.
     /// </summary>
@@ -89,6 +92,15 @@ public interface IConfig
     /// <param name="code">Setting code, specified either in 'code' field of the setting or by key in 'settings'.</param>
     /// <returns></returns>
     ISetting? GetSetting(string code);
+    /// <summary>
+    /// Get called when a setting value changes.
+    /// </summary>
+    public event Action<ISetting>? SettingChanged;
+    /// <summary>
+    /// Will try to assign values from config to object fields or properties with matching YAML codes.
+    /// </summary>
+    /// <param name="target"></param>
+    void AssignSettingsValues(object target);
 }
 
 public enum ConfigSettingType
@@ -139,4 +151,5 @@ public interface ISetting : IConfigBlock
     ConfigSettingType SettingType { get; }
     string YamlCode { get; }
     Validation? Validation { get; }
+    bool AssignSettingValue(object target);
 }

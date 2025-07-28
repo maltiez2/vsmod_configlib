@@ -561,7 +561,10 @@ internal class ConfigWindow
         string[] values = setting.Validation.Values.Select((value) => value.Token.ToString()).ToArray();
         string value = setting.Value.ToString();
         int index = DrawComboBox(Title(name), value, values, setting);
-        setting.Value = setting.Validation.Values[index];
+        if (index < setting.Validation.Values.Count)
+        {
+            setting.Value = setting.Validation.Values[index];
+        }
     }
 
     private void DrawMinMaxSetting(string name, ConfigSetting setting)

@@ -18,9 +18,58 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
     public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, DrawDelegateWrapper(drawDelegate));
     public void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, drawDelegate);
+    public void RegisterCustomManagedConfig(string domain, object configObject, string? path = null, Action? onSyncedFromServer = null, Action<string>? onSettingChanged = null, Action? onConfigSaved = null)
+    {
+        if (_api == null) return;
+
+        if (!_canRegisterNewConfig)
+        {
+            LogsUtil.Error(_api, this, $"Cant register custom managed config '{domain}': too late, configs have been already sent to clients");
+            return;
+        }
+
+        Config config = new(_api, domain, _api.ModLoader.GetMod(domain)?.Info.Name ?? Lang.Get(domain), configObject, path ?? domain + ".json");
+
+        _configs.Add(domain, config);
+        _domains.Add(domain);
+        _configsToRegister.Add(domain, config);
+
+        if (_api.Side == EnumAppSide.Server)
+        {
+            config.ConfigSaved += OnConfigSaved;
+            foreach ((string code, ConfigSetting setting) in config.Settings)
+            {
+                setting.SettingChanged += (value) => OnSettingChanged(domain, code, value);
+                OnSettingLoaded(domain, code, setting);
+            }
+        }
+
+        config.SettingChanged += setting => SettingChanged?.Invoke(domain, config, setting);
+        config.SettingChanged += setting =>
+        {
+            setting.AssignSettingValue(configObject);
+            onSettingChanged?.Invoke(setting.YamlCode);
+        };
+
+        config.ConfigSaved += config =>
+        {
+            onConfigSaved?.Invoke();
+        };
+
+        if (_api.Side == EnumAppSide.Client)
+        {
+            ConfigsLoaded += () =>
+            {
+                onSyncedFromServer?.Invoke();
+            };
+        }
+
+        _customManagedConfigs.Add(domain);
+    }
 
     public event Action? ConfigWindowClosed;
     public event Action? ConfigWindowOpened;
+    public event Action<string, IConfig, ISetting>? SettingChanged;
 
     public const string ConfigSavedEvent = "configlib:{0}:config-saved";
     public const string ConfigChangedEvent = "configlib:{0}:setting-changed";
@@ -40,6 +89,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     private readonly Dictionary<string, Config> _configs = new();
     private readonly HashSet<string> _domains = new();
     private readonly Dictionary<string, System.Func<string, ControlButtons, ControlButtons>> _customConfigs = new();
+    private readonly Dictionary<string, Config> _configsToRegister = [];
+    private readonly HashSet<string> _customManagedConfigs = [];
 
     private GuiManager? _guiManager;
     private ICoreAPI? _api;
@@ -48,10 +99,14 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     private IClientNetworkChannel? _eventsChannel;
     private IServerNetworkChannel? _eventsServerChannel;
     private const string _channelName = "configlib:events";
+    private bool _canRegisterNewConfig = true;
 
-    public override void Start(ICoreAPI api)
+    public override void StartPre(ICoreAPI api)
     {
         _api = api;
+    }
+    public override void Start(ICoreAPI api)
+    {
         _registry = api.RegisterRecipeRegistry<ConfigRegistry>(_registryCode);
         api.Event.RegisterEventBusListener(ReloadJsonConfigs, filterByEventName: ConfigReloadEvent);
 
@@ -130,6 +185,18 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         foreach ((string domain, Config config) in configs)
         {
+            if (_customManagedConfigs.Contains(domain))
+            {
+                _configs[domain].SyncFromServer(config, (_api as ICoreClientAPI)?.IsSinglePlayer == true);
+                _configs[domain].ConfigSaved += OnConfigSaved;
+                foreach ((string code, ConfigSetting setting) in _configs[domain].Settings)
+                {
+                    setting.SettingChanged += (value) => OnSettingChanged(domain, code, value);
+                    OnSettingLoaded(domain, code, setting);
+                }
+                continue;
+            }
+
             _domains.Add(domain);
             _configs[domain] = config;
             config.Apply();
@@ -176,6 +243,17 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
                 _api.Logger.VerboseDebug($"[Config lib] Error on loading config for {asset.Location.Domain}.\n{exception}\n");
             }
         }
+
+        if (_api.Side == EnumAppSide.Server)
+        {
+            foreach ((string domain, Config config) in _configsToRegister)
+            {
+                registry?.Register(domain, config);
+            }
+            _configsToRegister.Clear();
+        }
+
+        ConfigRegistry.OnToBytes += () => _canRegisterNewConfig = false;
     }
     private void LoadConfig(IAsset asset, ConfigRegistry? registry)
     {
@@ -185,7 +263,6 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         byte[] data = asset.Data;
         data = System.Text.Encoding.Convert(System.Text.Encoding.UTF8, System.Text.Encoding.Unicode, data);
         string json = System.Text.Encoding.Unicode.GetString(data);
-        //string json = System.Text.Encoding.UTF8.GetString(data);
         JObject token = JObject.Parse(json);
         JsonObject parsedConfig = new(token);
 
@@ -213,6 +290,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
                 OnSettingLoaded(domain, code, setting);
             }
         }
+
+        config.SettingChanged += setting => SettingChanged?.Invoke(domain, config, setting);
     }
     private static ConfigRegistry? GetRegistry(ICoreAPI api)
     {
@@ -227,7 +306,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         _api?.Event.PushEvent(eventName, eventDataTree);
         SendEventToServer(eventName, eventDataTree);
 
-        if (_api is ICoreClientAPI clientApi && !clientApi.IsSinglePlayer && clientApi.World.Player.HasPrivilege(Privilege.controlserver))
+        if (_api is ICoreClientAPI clientApi && clientApi.World.Player.HasPrivilege(Privilege.controlserver))
         {
             ServerSideSettingChanged packet = new(config.Domain, config.Settings.Where(setting => setting.Value.ChangedSinceLastSave && !setting.Value.ClientSide).ToDictionary());
 
@@ -237,7 +316,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
             }
         }
 
-        foreach ((_, var setting) in config.Settings)
+        foreach ((_, ConfigSetting? setting) in config.Settings)
         {
             setting.ChangedSinceLastSave = false;
         }
@@ -406,6 +485,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 internal sealed class ConfigRegistry : RecipeRegistryBase
 {
     public static event Action<Dictionary<string, Config>>? ConfigsLoaded;
+    public static event Action? OnToBytes;
 
     public override void FromBytes(IWorldAccessor resolver, int quantity, byte[] data)
     {
@@ -462,6 +542,8 @@ internal sealed class ConfigRegistry : RecipeRegistryBase
         resolver.Logger.Debug($"[Config lib] [Registry] Configs prepared to send to client: {quantity}");
 
         data = serializedConfigs.ToArray();
+
+        OnToBytes?.Invoke();
     }
     public void Register(string domain, Config config)
     {
