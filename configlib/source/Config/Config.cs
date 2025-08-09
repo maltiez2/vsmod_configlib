@@ -905,8 +905,7 @@ public sealed class Config : IConfig, IDisposable
 
             if (setting.Validation?.Mapping == null)
             {
-                //JToken converted = ConvertValue(value.Token, setting.SettingType);
-                setting.Value = value; // new(converted);
+                setting.Value = value;
                 continue;
             }
 

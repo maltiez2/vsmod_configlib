@@ -308,7 +308,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         if (_api is ICoreClientAPI clientApi && clientApi.World.Player.HasPrivilege(Privilege.controlserver))
         {
-            ServerSideSettingChanged packet = new(config.Domain, config.Settings.Where(setting => setting.Value.ChangedSinceLastSave && !setting.Value.ClientSide).ToDictionary());
+            ServerSideSettingChanged packet = new(config.Domain, config.Settings.Where(setting => setting.Value.ChangedSinceLastSave && !setting.Value.ClientSide).ToDictionary(), clientApi.IsSinglePlayer);
 
             if (packet.Settings.Any())
             {
@@ -426,7 +426,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         _api?.Logger.Audit($"[Config lib] config changed: '{player.PlayerName}' - {packet.ConfigDomain} - {settingsChanged}");
         _api?.Logger.Notification($"[Config lib] Player '{player.PlayerName}' changed settings: {settingsChanged}, and saved config file for mod '{_api.ModLoader.GetMod(packet.ConfigDomain)?.Info.Name} ({packet.ConfigDomain})'.");
 
-        config.WriteToFile();
+        if (!packet.IsSinglePlayer) config.WriteToFile();
 
         _eventsServerChannel?.BroadcastPacket(packet, player);
     }
@@ -598,10 +598,11 @@ internal class ServerSideSettingChanged
 {
     public Dictionary<string, ConfigSettingPacket> Settings { get; set; } = [];
     public string ConfigDomain { get; set; } = "";
+    public bool IsSinglePlayer { get; set; } = false;
 
     public ServerSideSettingChanged() { }
 
-    public ServerSideSettingChanged(string domain, Dictionary<string, ConfigSetting> settings)
+    public ServerSideSettingChanged(string domain, Dictionary<string, ConfigSetting> settings, bool isSinglePlayer)
     {
         Dictionary<string, ConfigSettingPacket> serialized = [];
         foreach ((string key, ConfigSetting? value) in settings)
@@ -611,5 +612,6 @@ internal class ServerSideSettingChanged
 
         Settings = serialized;
         ConfigDomain = domain;
+        IsSinglePlayer = isSinglePlayer;
     }
 }

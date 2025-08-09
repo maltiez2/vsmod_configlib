@@ -318,12 +318,12 @@ internal partial class AssetPatch
                 failed = true;
                 continue;
             }
-            if (config.GetSetting(setting)?.SettingType != ConfigSettingType.Other)
+            /*if (config.GetSetting(setting)?.SettingType != ConfigSettingType.Other)
             {
                 _api.Logger.Error($"[Config lib] Error on parsing patch '{assetPath}/{key}': setting '{setting}' is not form 'other' category.");
                 failed = true;
                 continue;
-            }
+            }*/
             _patches.Add(new JsonPatch(key, setting, config));
         }
 
@@ -372,7 +372,7 @@ internal partial class AssetPatch
     [GeneratedRegex("\\((?<expression>.+)\\) \\? (?<true>.+) \\: (?<false>.+)", RegexOptions.Compiled)]
     private static partial Regex GetBooleanExpressionRegex();
 
-    private const float _epsilon = 1e-10f;
+    private const float _epsilon = float.Epsilon;
     private string Process(string value, IContext<float, float> context)
     {
         Match match = _booleanExpressionRegex.Match(value);
