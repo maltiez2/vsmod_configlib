@@ -89,6 +89,13 @@ internal class ConfigWindow
 
             ImGui.Begin("Configs##configlib", ref opened, flags);
 
+            if (ImGui.GetIO().KeysDown[(int)ImGuiKey.Escape] && ImGui.IsWindowFocused())
+            {
+                ImGui.End();
+                SaveAll();
+                return false;
+            }
+
             DrawMenuBar();
             DrawConfigList();
 

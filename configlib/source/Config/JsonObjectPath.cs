@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json.Linq;
+using System.Collections.Generic;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Util;
 
@@ -52,6 +53,9 @@ internal sealed class JsonObjectPath
 
             PathElementDelegate? wildcardResult = TryParseWildcard(element);
             if (wildcardResult != null) return wildcardResult;
+
+            PathElementDelegate? conditionResult = TryParseCondition(element);
+            if (conditionResult != null) return conditionResult;
 
             return tree => PathElementByKey(tree, element);
         }
@@ -135,6 +139,38 @@ internal sealed class JsonObjectPath
 
         return result;
     }
+    private static IEnumerable<JsonObject> PathElementByCondition(IEnumerable<JsonObject> attributes, string code, string condition)
+    {
+        IEnumerable<JArray> arrays = attributes
+            .Select(element => element.Token)
+            .OfType<JArray>();
+
+        IEnumerable<JObject> objects = attributes
+            .Select(element => element.Token)
+            .OfType<JObject>();
+
+        IEnumerable<JToken> tokens = [];
+        if (arrays.Any())
+        {
+            tokens = tokens.Concat(arrays.Select(a => a as IEnumerable<JToken>).Aggregate((a, b) => a.Concat(b)));
+        }
+        if (objects.Any())
+        {
+            tokens = tokens.Concat(objects.Select(a => a as IEnumerable<JToken>).Aggregate((a, b) => a.Concat(b)));
+        }
+
+        IEnumerable<JsonObject> fromObjects = tokens
+            .OfType<JObject>()
+            .Select(a => new JsonObject(a))
+            .Where(a => a.KeyExists(code) && a[code].AsString() == condition);
+
+        IEnumerable<JsonObject> fromProperties = tokens
+            .OfType<JProperty>()
+            .Select(a => new JsonObject(a.Value))
+            .Where(a => a.KeyExists(code) && a[code].AsString() == condition);
+
+        return fromObjects.Concat(fromProperties);
+    }
 
     private static PathElementDelegate? TryParseRange(string element)
     {
@@ -156,5 +192,18 @@ internal sealed class JsonObjectPath
         string wildcard = element.Substring(2, element.Length - 2);
 
         return tree => PathElementByWildcard(tree, wildcard);
+    }
+    private static PathElementDelegate? TryParseCondition(string element)
+    {
+        if (!element.Contains("=")) return null;
+
+        string[] parts = element.Split("=");
+        
+        if (parts.Length != 2) return null;
+
+        string code = parts[0];
+        string condition = parts[1];
+
+        return tree => PathElementByCondition(tree, code, condition);
     }
 }

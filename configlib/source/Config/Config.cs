@@ -1170,6 +1170,11 @@ public sealed class Config : IConfig, IDisposable
     }
     private (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, ConfigSettingType settingType, string domain)
     {
+        if (!block.KeyExists("code"))
+        {
+            throw new ArgumentException($"[Config lib] ({domain}) Setting has no code: {block.ToString()}");
+        }
+        
         string code = block["code"].AsString();
         ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code, _api);
         return (code, setting);
