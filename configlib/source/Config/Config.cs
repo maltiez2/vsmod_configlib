@@ -677,7 +677,7 @@ public sealed class Config : IConfig, IDisposable
         }
     }
 
-    #region Files
+
     private bool ReadConfigFile(out string config)
     {
         config = "";
@@ -808,9 +808,9 @@ public sealed class Config : IConfig, IDisposable
             TryReadFromFile();
         }
     }
-    #endregion
 
-    #region Serialization
+
+
     private bool FromYaml(IEnumerable<ConfigSetting> settings, string yaml)
     {
         ValuesFromYaml(out Dictionary<string, JsonObject> values, yaml);
@@ -1194,7 +1194,6 @@ public sealed class Config : IConfig, IDisposable
         }
     }
 
-    #endregion
 
     private void Dispose(bool disposing)
     {

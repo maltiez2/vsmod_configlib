@@ -159,6 +159,9 @@ public class ConfigSetting : ISetting
                 case ConfigSettingType.Other:
                     property.SetValue(target, Value.ToAttribute());
                     break;
+                case ConfigSettingType.Color:
+                    property.SetValue(target, Value.AsString());
+                    break;
             }
             return true;
         }
@@ -185,6 +188,9 @@ public class ConfigSetting : ISetting
                     break;
                 case ConfigSettingType.Other:
                     field.SetValue(target, Value.ToAttribute());
+                    break;
+                case ConfigSettingType.Color:
+                    field.SetValue(target, Value.AsString());
                     break;
             }
             return true;
