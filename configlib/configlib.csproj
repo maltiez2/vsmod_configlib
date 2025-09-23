@@ -2,7 +2,6 @@
   <!-- Mod info -->
   <PropertyGroup>
     <ModName>Config lib</ModName>
-    <GameVersion>*</GameVersion>
     <ModVersion>1.10.3</ModVersion>
     <ModId>configlib</ModId>
     <Description>A universal place to configure your mods. Makes it possible for content mods to have configs too.</Description>
