@@ -1,1 +1,1 @@
-# configlib
+# Config lib
