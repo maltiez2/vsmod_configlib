@@ -47,7 +47,7 @@ public class ConfigSetting : ISetting
     public bool Logarithmic { get; internal set; }
     public bool ClientSide { get; internal set; }
     public bool Hide { get; internal set; }
-    public string Link { get; internal set; }
+    public string Link { get; internal set; } = "";
     public bool ChangedSinceLastSave {
         get;
         internal set;

@@ -13,9 +13,9 @@ internal sealed class JsonObjectPath
         _path = path.Split("/").Where(element => element != "").Select(Convert);
     }
 
-    public IEnumerable<JsonObject> Get(JsonObject? tree)
+    public IEnumerable<JsonObject> Get(JsonObject tree)
     {
-        IEnumerable<JsonObject> result = new JsonObject[] { tree };
+        IEnumerable<JsonObject> result = [tree];
         foreach (PathElementDelegate element in _path)
         {
             result = element.Invoke(result);
@@ -23,7 +23,7 @@ internal sealed class JsonObjectPath
         }
         return result;
     }
-    public int Set(JsonObject? tree, JsonObject value)
+    public int Set(JsonObject tree, JsonObject value)
     {
         IEnumerable<JsonObject> result = Get(tree);
 

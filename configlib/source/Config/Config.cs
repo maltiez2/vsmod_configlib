@@ -671,7 +671,7 @@ public sealed class Config : IConfig, IDisposable
         AllowedValuesAttribute? allowedValuesAttribute = info.GetCustomAttribute<AllowedValuesAttribute>();
         if (allowedValuesAttribute != null)
         {
-            IEnumerable<string> allowedValues = allowedValuesAttribute.Values.Select(Convert.ToString);
+            IEnumerable<string?> allowedValues = allowedValuesAttribute.Values.Select(Convert.ToString);
             JArray values = new(allowedValues);
             definition.Add("values", values);
         }
