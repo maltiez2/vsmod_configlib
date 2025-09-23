@@ -3,7 +3,7 @@ using Vintagestory.API.Common;
 
 namespace ConfigLib;
 
-internal static class LogsUtil
+internal static class LoggerUtil
 {
     private const string _prefix = "[Config lib]";
 

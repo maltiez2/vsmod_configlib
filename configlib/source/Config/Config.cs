@@ -334,7 +334,7 @@ public sealed class Config : IConfig, IDisposable
             }
             catch (Exception exception)
             {
-                LogsUtil.Error(_api, this, $"Exception on assigning value for setting '{setting.YamlCode}' for config '{_domain}'.\nException: {exception}");
+                LoggerUtil.Error(_api, this, $"Exception on assigning value for setting '{setting.YamlCode}' for config '{_domain}'.\nException: {exception}");
             }
         }
     }
@@ -447,7 +447,7 @@ public sealed class Config : IConfig, IDisposable
         }
         catch (Exception exception)
         {
-            LogsUtil.Verbose(_api, this, $"[ParseJson] Error on parsing config file:\n{exception}\nFile content:\n{jsonConfig}");
+            LoggerUtil.Verbose(_api, this, $"[ParseJson] Error on parsing config file:\n{exception}\nFile content:\n{jsonConfig}");
             throw;
         }
 
@@ -762,11 +762,20 @@ public sealed class Config : IConfig, IDisposable
 
         if (directory == null)
         {
-            LogsUtil.Warn(_api, this, $"[config domain: {_domain}] Unable to extract directory from: {ConfigFilePath}");
+            LoggerUtil.Warn(_api, this, $"[config domain: {_domain}] Unable to extract directory from: {ConfigFilePath}");
             return;
         }
 
-        _configFileWatcher = new(directory);
+        try
+        {
+            _configFileWatcher = new(directory);
+        }
+        catch (Exception exception)
+        {
+            string combined = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
+            LoggerUtil.Error(_api, this, $"[config domain: {_domain}] Failed to create file watcher. Automatic updates when file is changed on disc will not work.\nPaths:\n  data: {_api.DataBasePath}\n  combined: {combined}\nException:\n{exception}");
+            return;
+        }
 
         _configFileWatcher.Changed += FileEventHandler;
         _configFileWatcher.Created += FileEventHandler;
@@ -1033,7 +1042,7 @@ public sealed class Config : IConfig, IDisposable
         }
         catch (Exception exception)
         {
-            LogsUtil.Verbose(_api, this, $"[ValuesFromYaml] Error on parsing config file:\n{exception}\nFile content:\n{yaml}");
+            LoggerUtil.Verbose(_api, this, $"[ValuesFromYaml] Error on parsing config file:\n{exception}\nFile content:\n{yaml}");
             throw;
         }
 

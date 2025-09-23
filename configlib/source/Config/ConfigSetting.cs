@@ -354,7 +354,7 @@ public class ConfigSetting : ISetting
     }
     internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code, ICoreAPI api)
     {
-        if (!json.KeyExists("default")) LogsUtil.Error(api, typeof(ConfigSetting), $"Setting '{domain}' of type '{settingType}' does not have default value");
+        if (!json.KeyExists("default")) LoggerUtil.Error(api, typeof(ConfigSetting), $"Setting '{domain}' of type '{settingType}' does not have default value");
 
         ConfigSetting setting = new(
             yamlCode: json["name"].AsString(code),

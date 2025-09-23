@@ -24,7 +24,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         if (!_canRegisterNewConfig)
         {
-            LogsUtil.Error(_api, this, $"Cant register custom managed config '{domain}': too late, configs have been already sent to clients");
+            LoggerUtil.Error(_api, this, $"Cant register custom managed config '{domain}': too late, configs have been already sent to clients");
             return;
         }
 
