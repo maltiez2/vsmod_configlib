@@ -96,7 +96,7 @@
     <DefaultLocalSettingsFile>
 &lt;Project&gt;
    &lt;PropertyGroup&gt;
-      &lt;DataFolderName&gt;VintagestoryDataDev&lt;/DataFolderName&gt;
+      &lt;DataFolderName&gt;VintagestoryData&lt;/DataFolderName&gt;
       &lt;GameDirectory&gt;%24(VINTAGE_STORY)&lt;/GameDirectory&gt;
       &lt;EnterWorldOnStartup&gt;false&lt;/EnterWorldOnStartup&gt;
       &lt;DataFolderDirectoy&gt;%24(AppData)&lt;/DataFolderDirectoy&gt;
