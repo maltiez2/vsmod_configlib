@@ -95,14 +95,14 @@
   <!-- Creating local settings file -->
   <PropertyGroup>
     <DefaultLocalSettingsFile>
-&lt;Project&gt;
-  &lt;PropertyGroup&gt;
+      &lt;Project&gt;
+      &lt;PropertyGroup&gt;
       &lt;DataFolderName&gt;VintagestoryDataDev&lt;/DataFolderName&gt;
       &lt;GameDirectory&gt;%24(VINTAGE_STORY)&lt;/GameDirectory&gt;
       &lt;EnterWorldOnStartup&gt;false&lt;/EnterWorldOnStartup&gt;
       &lt;DataFolderDirectoy&gt;%24(AppData)&lt;/DataFolderDirectoy&gt;
-  &lt;/PropertyGroup&gt;
-&lt;/Project&gt;
+      &lt;/PropertyGroup&gt;
+      &lt;/Project&gt;
     </DefaultLocalSettingsFile>
   </PropertyGroup>
   <Target Name="EnsureSettingsJson" BeforeTargets="ModInfo" Condition="!Exists('Properties\localSettings.props')">
@@ -110,9 +110,14 @@
     <WriteLinesToFile File="Properties\localSettings.props" Overwrite="true" Lines="$(DefaultLocalSettingsFile)" />
     <Error Text="Local settings file was missing, generated a new one. Run build again." />
   </Target>
+
+  <!-- Forces rebuild -->
+  <Target Name="ForceRebuild" BeforeTargets="BeforeBuild">
+    <Touch Files="@(Compile)" AlwaysCreate="true" />
+  </Target>
   
   <!-- Creates/updates modinfo.json file in build directory -->
-  <Target Name="ModInfo" AfterTargets="CleanReferenceCopyLocalPaths">
+  <Target Name="ModInfo" BeforeTargets="CopyFilesToOutput">
     <PropertyGroup>
       <ModInfo>
 {
@@ -139,7 +144,7 @@
   </Target>
 
   <!-- Copies modicon if it exists into output directory -->
-  <Target Name="CopyFilesToOutput" AfterTargets="ModInfo">
+  <Target Name="CopyFilesToOutput" AfterTargets="ModInfo" BeforeTargets="BeforeBuild">
     <ItemGroup Condition="Exists('$(ModIconFile)')">
       <ModIcon Include="$(ModIconFile)" />
     </ItemGroup>
@@ -148,7 +153,7 @@
   </Target>
 
   <!-- Archives output directory into zip and puts it into Releases folder -->
-  <Target Name="ZipFiles" AfterTargets="CopyFilesToOutput" Condition=" '$(Configuration)' == 'Release' ">
+  <Target Name="ZipFiles" AfterTargets="Build" Condition=" '$(Configuration)' == 'Release' ">
     <Message Text="Pachaging into '$(ReleaseFile)'" Importance="high" />
     <MakeDir Directories="$(ReleasesDir)" />
     <Delete Files="$(ReleasePath)" />
