@@ -5,37 +5,12 @@ using Vintagestory.API.Config;
 
 namespace ConfigLib.Patches;
 
+[HarmonyPatchCategory("client")]
+[HarmonyPatch]
 internal static class PauseMenuPatch
 {
-    public static void Patch()
-    {
-        new Harmony("configlib").Patch(
-            typeof(GuiComposerHelpers).GetMethod("AddButton", AccessTools.all, new Type[] {
-                typeof(GuiComposer),
-                typeof(string),
-                typeof(ActionConsumable),
-                typeof(ElementBounds),
-                typeof(EnumButtonStyle),
-                typeof(string)
-            }),
-                prefix: new HarmonyMethod(AccessTools.Method(typeof(PauseMenuPatch), nameof(AddButton)))
-            );
-    }
-    public static void Unpatch()
-    {
-        new Harmony("configlib").Unpatch(
-            typeof(GuiComposerHelpers).GetMethod("AddButton", AccessTools.all, new Type[] {
-                typeof(GuiComposer),
-                typeof(string),
-                typeof(ActionConsumable),
-                typeof(ElementBounds),
-                typeof(EnumButtonStyle),
-                typeof(string)
-            }),
-                HarmonyPatchType.Prefix
-            );
-    }
-
+    [HarmonyPatch(typeof(GuiComposerHelpers), nameof(GuiComposerHelpers.AddButton), argumentTypes: [ typeof(GuiComposer), typeof(string), typeof(ActionConsumable), typeof(ElementBounds), typeof(EnumButtonStyle), typeof(string) ])]
+    [HarmonyPrefix]
     private static bool AddButton(ref GuiComposer __result, GuiComposer composer, string text, ActionConsumable onClick, ElementBounds bounds)
     {
         if (text != Lang.Get("game:mainmenu-settings") || bounds.fixedWidth < 200) return true;

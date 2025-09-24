@@ -1,4 +1,4 @@
-﻿using ConfigLib.Patches;
+﻿using HarmonyLib;
 using Newtonsoft.Json.Linq;
 using ProtoBuf;
 using Vintagestory.API.Client;
@@ -13,6 +13,8 @@ namespace ConfigLib;
 
 public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 {
+    public const string HarmonyId = "configlib";
+
     public IEnumerable<string> Domains => _domains;
     public IConfig? GetConfig(string domain) => GetConfigImpl(domain);
     public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
@@ -105,14 +107,21 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     {
         _api = api;
     }
+
     public override void Start(ICoreAPI api)
     {
         _registry = api.RegisterRecipeRegistry<ConfigRegistry>(_registryCode);
         api.Event.RegisterEventBusListener(ReloadJsonConfigs, filterByEventName: ConfigReloadEvent);
 
+        var harmony = new Harmony(HarmonyId);
+        if (!Harmony.HasAnyPatches(HarmonyId))
+        {
+            harmony.PatchAllUncategorized();
+        }
+
         if (api.Side == EnumAppSide.Client)
         {
-            PauseMenuPatch.Patch();
+            harmony.PatchCategory("client");
             ConfigRegistry.ConfigsLoaded += ReloadConfigs;
             _eventsChannel = (api as ICoreClientAPI)?.Network.RegisterChannel(_channelName)
                 .RegisterMessageType<ConfigEventPacket>()
@@ -122,6 +131,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         }
         else
         {
+            harmony.PatchCategory("server");
             _eventsServerChannel = (api as ICoreServerAPI)?.Network.RegisterChannel(_channelName)
                 .RegisterMessageType<ConfigEventPacket>()
                 .SetMessageHandler<ConfigEventPacket>(SendEvent)
@@ -129,6 +139,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
                 .SetMessageHandler<ServerSideSettingChanged>(OnServerSettingChanged);
         }
     }
+
     public override void AssetsLoaded(ICoreAPI api)
     {
         LoadConfigs();
@@ -143,10 +154,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     public override double ExecuteOrder() => 0.01;
     public override void Dispose()
     {
-        if (_api?.Side == EnumAppSide.Client)
-        {
-            PauseMenuPatch.Patch();
-        }
+        new Harmony(HarmonyId).UnpatchAll(HarmonyId);
 
         foreach ((_, Config config) in _configs)
         {
@@ -156,12 +164,9 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         _configs.Clear();
         _domains.Clear();
         _customConfigs.Clear();
-        if (_api?.Side == EnumAppSide.Client && _guiManager != null)
-        {
-            _guiManager.Dispose();
-        }
         if (_api?.Side == EnumAppSide.Client)
         {
+            _guiManager?.Dispose();
             ConfigRegistry.ConfigsLoaded -= ReloadConfigs;
         }
         _registry = null;
