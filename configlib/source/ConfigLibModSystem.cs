@@ -334,19 +334,19 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         switch (setting.SettingType)
         {
-            case ConfigSettingType.Boolean:
+            case EnumConfigSettingType.Boolean:
                 eventDataTree.SetBool("value", setting.Value.AsBool());
                 break;
-            case ConfigSettingType.Float:
+            case EnumConfigSettingType.Float:
                 eventDataTree.SetFloat("value", setting.Value.AsFloat());
                 break;
-            case ConfigSettingType.Integer:
+            case EnumConfigSettingType.Integer:
                 eventDataTree.SetInt("value", setting.Value.AsInt());
                 break;
-            case ConfigSettingType.String:
+            case EnumConfigSettingType.String:
                 eventDataTree.SetString("value", setting.Value.AsString());
                 break;
-            case ConfigSettingType.Other:
+            case EnumConfigSettingType.Other:
                 eventDataTree.SetAttribute("value", setting.Value.ToAttribute());
                 break;
         }
@@ -362,19 +362,19 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         switch (setting.SettingType)
         {
-            case ConfigSettingType.Boolean:
+            case EnumConfigSettingType.Boolean:
                 eventDataTree.SetBool("value", setting.Value.AsBool());
                 break;
-            case ConfigSettingType.Float:
+            case EnumConfigSettingType.Float:
                 eventDataTree.SetFloat("value", setting.Value.AsFloat());
                 break;
-            case ConfigSettingType.Integer:
+            case EnumConfigSettingType.Integer:
                 eventDataTree.SetInt("value", setting.Value.AsInt());
                 break;
-            case ConfigSettingType.String:
+            case EnumConfigSettingType.String:
                 eventDataTree.SetString("value", setting.Value.AsString());
                 break;
-            case ConfigSettingType.Other:
+            case EnumConfigSettingType.Other:
                 eventDataTree.SetAttribute("value", setting.Value.ToAttribute());
                 break;
         }

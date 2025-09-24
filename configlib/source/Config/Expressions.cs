@@ -19,9 +19,9 @@ internal sealed class NumberSettingsContext : IContext<float, float>
     {
         return setting.SettingType switch
         {
-            ConfigSettingType.Boolean => true,
-            ConfigSettingType.Float => true,
-            ConfigSettingType.Integer => true,
+            EnumConfigSettingType.Boolean => true,
+            EnumConfigSettingType.Float => true,
+            EnumConfigSettingType.Integer => true,
             _ => false
         };
     }
@@ -29,9 +29,9 @@ internal sealed class NumberSettingsContext : IContext<float, float>
     {
         return setting.SettingType switch
         {
-            ConfigSettingType.Boolean => setting.Value.AsBool() ? 1 : 0,
-            ConfigSettingType.Float => setting.Value.AsFloat(),
-            ConfigSettingType.Integer => setting.Value.AsFloat(),
+            EnumConfigSettingType.Boolean => setting.Value.AsBool() ? 1 : 0,
+            EnumConfigSettingType.Float => setting.Value.AsFloat(),
+            EnumConfigSettingType.Integer => setting.Value.AsFloat(),
             _ => 0
         };
     }
@@ -43,7 +43,7 @@ internal sealed class BooleanSettingsContext : IContext<bool, bool>
 
     public BooleanSettingsContext(Dictionary<string, ConfigSetting> settings)
     {
-        _settings = settings.Where(entry => entry.Value.SettingType == ConfigSettingType.Boolean).ToDictionary(entry => entry.Key, entry => entry.Value.Value.AsBool());
+        _settings = settings.Where(entry => entry.Value.SettingType == EnumConfigSettingType.Boolean).ToDictionary(entry => entry.Key, entry => entry.Value.Value.AsBool());
     }
 
     public bool Resolvable(string name) => _settings.ContainsKey(name);
@@ -56,7 +56,7 @@ internal sealed class StringSettingsContext : IContext<string, string>
 
     public StringSettingsContext(Dictionary<string, ConfigSetting> settings)
     {
-        _settings = settings.Where(entry => entry.Value.SettingType == ConfigSettingType.String).ToDictionary(entry => entry.Key, entry => entry.Value.Value.AsString());
+        _settings = settings.Where(entry => entry.Value.SettingType == EnumConfigSettingType.String).ToDictionary(entry => entry.Key, entry => entry.Value.Value.AsString());
     }
 
     public bool Resolvable(string name) => _settings.ContainsKey(name);
@@ -69,7 +69,7 @@ internal sealed class JsonSettingsContext : IContext<JsonObject, JsonObject>
 
     public JsonSettingsContext(Dictionary<string, ConfigSetting> settings)
     {
-        _settings = settings.Where(entry => entry.Value.SettingType == ConfigSettingType.Other).ToDictionary(entry => entry.Key, entry => entry.Value.Value);
+        _settings = settings.Where(entry => entry.Value.SettingType == EnumConfigSettingType.Other).ToDictionary(entry => entry.Key, entry => entry.Value.Value);
     }
 
     public bool Resolvable(string name) => _settings.ContainsKey(name);

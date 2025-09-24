@@ -476,19 +476,19 @@ internal class ConfigWindow
         {
             switch (setting.SettingType)
             {
-                case ConfigSettingType.Boolean:
+                case EnumConfigSettingType.Boolean:
                     DrawBooleanSetting(name, setting);
                     break;
-                case ConfigSettingType.Integer:
+                case EnumConfigSettingType.Integer:
                     DrawIntegerSetting(name, setting);
                     break;
-                case ConfigSettingType.Float:
+                case EnumConfigSettingType.Float:
                     DrawFloatSetting(name, setting);
                     break;
-                case ConfigSettingType.String:
+                case EnumConfigSettingType.String:
                     DrawStringSetting(name, setting);
                     break;
-                case ConfigSettingType.Color:
+                case EnumConfigSettingType.Color:
                     DrawColorSetting(name, setting);
                     break;
                 default:

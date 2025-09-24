@@ -26,7 +26,7 @@ public class ConfigSetting : ISetting
         }
     }
     public JsonObject DefaultValue { get; internal set; }
-    public ConfigSettingType SettingType { get; internal set; }
+    public EnumConfigSettingType SettingType { get; internal set; }
     public string YamlCode { get; internal set; }
     public string? MappingKey
     {
@@ -55,7 +55,7 @@ public class ConfigSetting : ISetting
 
     public event Action<ConfigSetting>? SettingChanged;
 
-    public ConfigSetting(string yamlCode, JsonObject defaultValue, ConfigSettingType settingType)
+    public ConfigSetting(string yamlCode, JsonObject defaultValue, EnumConfigSettingType settingType)
     {
         _value = defaultValue;
         DefaultValue = defaultValue;
@@ -68,7 +68,7 @@ public class ConfigSetting : ISetting
     {
         _value = new(Unwrap(JObject.Parse(settings.Value)));
         DefaultValue = _value;
-        SettingType = ConfigSettingType.None;
+        SettingType = EnumConfigSettingType.None;
         MappingKey = settings.MappingKey;
         ClientSide = settings.ClientSide;
         YamlCode = string.Empty;
@@ -144,22 +144,22 @@ public class ConfigSetting : ISetting
         {
             switch (SettingType)
             {
-                case ConfigSettingType.Boolean:
+                case EnumConfigSettingType.Boolean:
                     property.SetValue(target, Value.AsBool());
                     break;
-                case ConfigSettingType.Float:
+                case EnumConfigSettingType.Float:
                     property.SetValue(target, Value.AsFloat());
                     break;
-                case ConfigSettingType.Integer:
+                case EnumConfigSettingType.Integer:
                     property.SetValue(target, Value.AsInt());
                     break;
-                case ConfigSettingType.String:
+                case EnumConfigSettingType.String:
                     property.SetValue(target, Value.AsString());
                     break;
-                case ConfigSettingType.Other:
+                case EnumConfigSettingType.Other:
                     property.SetValue(target, Value.ToAttribute());
                     break;
-                case ConfigSettingType.Color:
+                case EnumConfigSettingType.Color:
                     property.SetValue(target, Value.AsString());
                     break;
             }
@@ -174,22 +174,22 @@ public class ConfigSetting : ISetting
         {
             switch (SettingType)
             {
-                case ConfigSettingType.Boolean:
+                case EnumConfigSettingType.Boolean:
                     field.SetValue(target, Value.AsBool());
                     break;
-                case ConfigSettingType.Float:
+                case EnumConfigSettingType.Float:
                     field.SetValue(target, Value.AsFloat());
                     break;
-                case ConfigSettingType.Integer:
+                case EnumConfigSettingType.Integer:
                     field.SetValue(target, Value.AsInt());
                     break;
-                case ConfigSettingType.String:
+                case EnumConfigSettingType.String:
                     field.SetValue(target, Value.AsString());
                     break;
-                case ConfigSettingType.Other:
+                case EnumConfigSettingType.Other:
                     field.SetValue(target, Value.ToAttribute());
                     break;
-                case ConfigSettingType.Color:
+                case EnumConfigSettingType.Color:
                     field.SetValue(target, Value.AsString());
                     break;
             }
@@ -352,7 +352,7 @@ public class ConfigSetting : ISetting
         string langCode = hasDomain ? value : $"{domain}:{value}";
         return Lang.HasTranslation(langCode) ? Lang.Get(langCode) : Lang.Get(value);
     }
-    internal static ConfigSetting FromJson(JsonObject json, ConfigSettingType settingType, string domain, string code, ICoreAPI api)
+    internal static ConfigSetting FromJson(JsonObject json, EnumConfigSettingType settingType, string domain, string code, ICoreAPI api)
     {
         if (!json.KeyExists("default")) LoggerUtil.Error(api, typeof(ConfigSetting), $"Setting '{domain}' of type '{settingType}' does not have default value");
 

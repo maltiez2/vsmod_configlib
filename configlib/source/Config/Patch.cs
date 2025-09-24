@@ -102,11 +102,11 @@ internal partial class AssetPatch
 
         if (!ConstructBooleanPatches(definition, assetPath, context))
             _api.Logger.Debug($"[Config lib] Error on parsing 'boolean' patches for '{assetPath}'.");
-        if (!ConstructNumberPatches(definition, assetPath, context, "number", ConfigSettingType.Float))
+        if (!ConstructNumberPatches(definition, assetPath, context, "number", EnumConfigSettingType.Float))
             _api.Logger.Debug($"[Config lib] Error on parsing 'number' patches for '{assetPath}'.");
-        if (!ConstructNumberPatches(definition, assetPath, context, "float", ConfigSettingType.Float))
+        if (!ConstructNumberPatches(definition, assetPath, context, "float", EnumConfigSettingType.Float))
             _api.Logger.Debug($"[Config lib] Error on parsing 'float' patches for '{assetPath}'.");
-        if (!ConstructNumberPatches(definition, assetPath, context, "integer", ConfigSettingType.Integer))
+        if (!ConstructNumberPatches(definition, assetPath, context, "integer", EnumConfigSettingType.Integer))
             _api.Logger.Debug($"[Config lib] Error on parsing 'integer' patches for '{assetPath}'.");
         if (!ConstructConstPatches(definition, assetPath))
             _api.Logger.Debug($"[Config lib] Error on parsing 'const' patches for '{assetPath}'.");
@@ -329,7 +329,7 @@ internal partial class AssetPatch
 
         return !failed;
     }
-    private bool ConstructNumberPatches(JsonObject definition, string assetPath, CombinedContext<float, float> context, string category, ConfigSettingType type)
+    private bool ConstructNumberPatches(JsonObject definition, string assetPath, CombinedContext<float, float> context, string category, EnumConfigSettingType type)
     {
         if (!definition.KeyExists(category)) return true;
         if (!definition[category].KeyExists(assetPath)) return true;
@@ -428,9 +428,9 @@ internal sealed class NumberPatch : IValuePatch
     private readonly JsonObjectPath _path;
     private readonly INode<float, float, float> _value;
     private readonly IContext<float, float> _context;
-    private readonly ConfigSettingType _returnType;
+    private readonly EnumConfigSettingType _returnType;
 
-    public NumberPatch(string path, string formula, IContext<float, float> context, ConfigSettingType type)
+    public NumberPatch(string path, string formula, IContext<float, float> context, EnumConfigSettingType type)
     {
         _path = new(path);
         Path = path;
@@ -461,10 +461,10 @@ internal sealed class NumberPatch : IValuePatch
 
         switch (_returnType)
         {
-            case ConfigSettingType.Float:
+            case EnumConfigSettingType.Float:
                 jsonValue?.Token.Replace(new JValue(value));
                 break;
-            case ConfigSettingType.Integer:
+            case EnumConfigSettingType.Integer:
                 jsonValue?.Token.Replace(new JValue((int)value));
                 break;
         }

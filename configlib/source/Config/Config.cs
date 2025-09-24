@@ -500,9 +500,9 @@ public sealed class Config : IConfig, IDisposable
     {
         definition = [];
 
-        ConfigSettingType settingType = GetSettingType(info);
+        EnumConfigSettingType settingType = GetSettingType(info);
 
-        if (settingType == ConfigSettingType.None) return false;
+        if (settingType == EnumConfigSettingType.None) return false;
 
         string code = info.Name;
 
@@ -538,13 +538,13 @@ public sealed class Config : IConfig, IDisposable
 
         switch (settingType)
         {
-            case ConfigSettingType.Float:
+            case EnumConfigSettingType.Float:
                 SetFloatSettingDefinition(info, definition);
                 break;
-            case ConfigSettingType.Integer:
+            case EnumConfigSettingType.Integer:
                 SetIntegerSettingDefinition(info, definition);
                 break;
-            case ConfigSettingType.String:
+            case EnumConfigSettingType.String:
                 SetStringSettingDefinition(info, definition);
                 break;
             default:
@@ -553,27 +553,27 @@ public sealed class Config : IConfig, IDisposable
 
         return true;
     }
-    private static ConfigSettingType GetSettingType(MemberInfo info)
+    private static EnumConfigSettingType GetSettingType(MemberInfo info)
     {
         Type? valueType = (info as PropertyInfo)?.PropertyType ?? (info as FieldInfo)?.FieldType;
 
-        if (valueType == null) return ConfigSettingType.None;
+        if (valueType == null) return EnumConfigSettingType.None;
 
         if (valueType.IsEnum)
         {
-            return ConfigSettingType.Integer;
+            return EnumConfigSettingType.Integer;
         }
         else if (valueType == typeof(float) || valueType == typeof(double))
         {
-            return ConfigSettingType.Float;
+            return EnumConfigSettingType.Float;
         }
         else if (valueType == typeof(string))
         {
-            return ConfigSettingType.String;
+            return EnumConfigSettingType.String;
         }
         else if (valueType == typeof(bool))
         {
-            return ConfigSettingType.Boolean;
+            return EnumConfigSettingType.Boolean;
         }
         else if (
             valueType == typeof(int) ||
@@ -583,12 +583,12 @@ public sealed class Config : IConfig, IDisposable
             valueType == typeof(ulong) ||
             valueType == typeof(ushort))
         {
-            return ConfigSettingType.Integer;
+            return EnumConfigSettingType.Integer;
         }
 
-        return ConfigSettingType.None;
+        return EnumConfigSettingType.None;
     }
-    private static JValue GetDefaultValue(MemberInfo info, object configObject, ConfigSettingType settingType)
+    private static JValue GetDefaultValue(MemberInfo info, object configObject, EnumConfigSettingType settingType)
     {
         DefaultValueAttribute? attribute = info.GetCustomAttribute<DefaultValueAttribute>();
         object? value = attribute?.Value ?? (info as PropertyInfo)?.GetValue(configObject) ?? (info as FieldInfo)?.GetValue(configObject);
@@ -597,10 +597,10 @@ public sealed class Config : IConfig, IDisposable
 
         return settingType switch
         {
-            ConfigSettingType.Boolean => new JValue((bool)value),
-            ConfigSettingType.Float => new JValue((float)value),
-            ConfigSettingType.Integer => new JValue((int)value),
-            ConfigSettingType.String => new JValue((string)value),
+            EnumConfigSettingType.Boolean => new JValue((bool)value),
+            EnumConfigSettingType.Float => new JValue((float)value),
+            EnumConfigSettingType.Integer => new JValue((int)value),
+            EnumConfigSettingType.String => new JValue((string)value),
             _ => new(value)
         };
     }
@@ -938,7 +938,7 @@ public sealed class Config : IConfig, IDisposable
             }
 
             string code = property.Name;
-            ConfigSetting setting = new(code, new JsonObject(property.Value), ConfigSettingType.Constant)
+            ConfigSetting setting = new(code, new JsonObject(property.Value), EnumConfigSettingType.Constant)
             {
                 Hide = true
             };
@@ -1010,7 +1010,7 @@ public sealed class Config : IConfig, IDisposable
     }
     private int ConvertVersion(JToken value)
     {
-        return new JsonObject(ConvertValue(value, ConfigSettingType.Integer)).AsInt(0);
+        return new JsonObject(ConvertValue(value, EnumConfigSettingType.Integer)).AsInt(0);
     }
     private string ConstructYaml(IEnumerable<ConfigSetting> settings, SortedDictionary<float, IConfigBlock> formatting, int version)
     {
@@ -1053,7 +1053,7 @@ public sealed class Config : IConfig, IDisposable
             values.Add(code, new(value));
         }
     }
-    private JToken ConvertValue(JToken? value, ConfigSettingType type)
+    private JToken ConvertValue(JToken? value, EnumConfigSettingType type)
     {
         string? strValue = (string?)(value as JValue)?.Value;
         if (strValue == null) return value ?? new JValue(strValue);
@@ -1062,18 +1062,18 @@ public sealed class Config : IConfig, IDisposable
 
         switch (type)
         {
-            case ConfigSettingType.Boolean:
+            case EnumConfigSettingType.Boolean:
                 bool boolValue = bool.Parse(strValue);
                 return new JValue(boolValue);
-            case ConfigSettingType.Float:
+            case EnumConfigSettingType.Float:
                 float floatValue = float.Parse(strValue, NumberStyles.Float, culture);
                 return new JValue(floatValue);
-            case ConfigSettingType.Integer:
+            case EnumConfigSettingType.Integer:
                 int intValue = int.Parse(strValue, NumberStyles.Integer, culture);
                 return new JValue(intValue);
-            case ConfigSettingType.String:
+            case EnumConfigSettingType.String:
                 return new JValue(strValue);
-            case ConfigSettingType.Color:
+            case EnumConfigSettingType.Color:
                 return new JValue(strValue);
             default:
                 return value ?? new JValue(strValue);
@@ -1102,37 +1102,37 @@ public sealed class Config : IConfig, IDisposable
 
         if (definition["settings"].KeyExists("boolean"))
         {
-            ParseSettingsCategory(definition["settings"]["boolean"], settings, ConfigSettingType.Boolean, domain);
+            ParseSettingsCategory(definition["settings"]["boolean"], settings, EnumConfigSettingType.Boolean, domain);
         }
 
         if (definition["settings"].KeyExists("integer"))
         {
-            ParseSettingsCategory(definition["settings"]["integer"], settings, ConfigSettingType.Integer, domain);
+            ParseSettingsCategory(definition["settings"]["integer"], settings, EnumConfigSettingType.Integer, domain);
         }
 
         if (definition["settings"].KeyExists("float"))
         {
-            ParseSettingsCategory(definition["settings"]["float"], settings, ConfigSettingType.Float, domain);
+            ParseSettingsCategory(definition["settings"]["float"], settings, EnumConfigSettingType.Float, domain);
         }
 
         if (definition["settings"].KeyExists("number"))
         {
-            ParseSettingsCategory(definition["settings"]["number"], settings, ConfigSettingType.Float, domain);
+            ParseSettingsCategory(definition["settings"]["number"], settings, EnumConfigSettingType.Float, domain);
         }
 
         if (definition["settings"].KeyExists("string"))
         {
-            ParseSettingsCategory(definition["settings"]["string"], settings, ConfigSettingType.String, domain);
+            ParseSettingsCategory(definition["settings"]["string"], settings, EnumConfigSettingType.String, domain);
         }
 
         if (definition["settings"].KeyExists("other"))
         {
-            ParseSettingsCategory(definition["settings"]["other"], settings, ConfigSettingType.Other, domain);
+            ParseSettingsCategory(definition["settings"]["other"], settings, EnumConfigSettingType.Other, domain);
         }
 
         if (definition["settings"].KeyExists("color"))
         {
-            ParseSettingsCategory(definition["settings"]["color"], settings, ConfigSettingType.Color, domain);
+            ParseSettingsCategory(definition["settings"]["color"], settings, EnumConfigSettingType.Color, domain);
         }
     }
     private void SettingsAndFormattingFromJsonArray(Dictionary<string, ConfigSetting> settings, JsonObject[] definition, out SortedDictionary<float, IConfigBlock> configBlocks, string domain)
@@ -1154,16 +1154,16 @@ public sealed class Config : IConfig, IDisposable
                     break;
             }
 
-            ConfigSettingType settingType = type switch
+            EnumConfigSettingType settingType = type switch
             {
-                "boolean" => ConfigSettingType.Boolean,
-                "integer" => ConfigSettingType.Integer,
-                "number" => ConfigSettingType.Float,
-                "float" => ConfigSettingType.Float,
-                "string" => ConfigSettingType.String,
-                "other" => ConfigSettingType.Other,
-                "color" => ConfigSettingType.Color,
-                _ => ConfigSettingType.None
+                "boolean" => EnumConfigSettingType.Boolean,
+                "integer" => EnumConfigSettingType.Integer,
+                "number" => EnumConfigSettingType.Float,
+                "float" => EnumConfigSettingType.Float,
+                "string" => EnumConfigSettingType.String,
+                "other" => EnumConfigSettingType.Other,
+                "color" => EnumConfigSettingType.Color,
+                _ => EnumConfigSettingType.None
             };
 
             (string code, ConfigSetting setting) = ParseSettingBlock(block, settingType, domain);
@@ -1177,7 +1177,7 @@ public sealed class Config : IConfig, IDisposable
         IFormattingBlock formattingBlock = ParseBlock(block, domain);
         return formattingBlock;
     }
-    private (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, ConfigSettingType settingType, string domain)
+    private (string code, ConfigSetting setting) ParseSettingBlock(JsonObject block, EnumConfigSettingType settingType, string domain)
     {
         if (!block.KeyExists("code"))
         {
@@ -1188,7 +1188,7 @@ public sealed class Config : IConfig, IDisposable
         ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code, _api);
         return (code, setting);
     }
-    private void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, ConfigSettingType settingType, string domain)
+    private void ParseSettingsCategory(JsonObject category, Dictionary<string, ConfigSetting> settings, EnumConfigSettingType settingType, string domain)
     {
         foreach (JToken item in category.Token)
         {
