@@ -54,7 +54,7 @@ internal class ConfigWindow
         }
         foreach (string mod in _custom.Keys)
         {
-            if (!_mods.Contains(mod)) _mods.Add(mod);
+            _mods.Add(mod);
         }
 
         _style = new Style
@@ -175,7 +175,7 @@ internal class ConfigWindow
     {
         foreach (string mod in _custom.Keys)
         {
-            if (!_mods.Contains(mod)) _mods.Add(mod);
+            _mods.Add(mod);
         }
     }
 
@@ -198,7 +198,7 @@ internal class ConfigWindow
         Config? config = _configsSystem.GetConfigImpl(domain);
         config?.WriteToFile();
 
-        if (_unsavedDomains.Contains(_currentIndex)) _unsavedDomains.Remove(_currentIndex);
+        _unsavedDomains.Remove(_currentIndex);
         if (!_unsavedDomains.Any()) _unsavedChanges = false;
     }
     private void RestoreSettings(string domain)
@@ -805,7 +805,7 @@ internal class ConfigWindow
 
     private void SetUnsavedChanges()
     {
-        if (!_unsavedDomains.Contains(_currentIndex)) _unsavedDomains.Add(_currentIndex);
+        _unsavedDomains.Add(_currentIndex);
         _unsavedChanges = true;
     }
 }
