@@ -29,7 +29,8 @@ public sealed class Config : IConfig, IDisposable
         _modName = modName;
         _json = json;
 
-        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
+        RelativeFilePath = $"{_domain}.yaml";
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", RelativeFilePath);
 
         try
         {
@@ -56,7 +57,8 @@ public sealed class Config : IConfig, IDisposable
         _modName = modName;
         _json = json;
 
-        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
+        RelativeFilePath = $"{_domain}.yaml";
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", RelativeFilePath);
 
         try
         {
@@ -82,6 +84,7 @@ public sealed class Config : IConfig, IDisposable
         _domain = domain;
         _modName = modName;
         _json = json;
+        RelativeFilePath = file;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
         _configType = ConfigType.JSON;
@@ -109,6 +112,7 @@ public sealed class Config : IConfig, IDisposable
         _domain = domain;
         _modName = modName;
         _json = json;
+        RelativeFilePath = file;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
         _configType = ConfigType.JSON;
@@ -137,6 +141,7 @@ public sealed class Config : IConfig, IDisposable
         _domain = domain;
         _modName = modName;
         _json = DefinitionFromObject(configObject, domain);
+        RelativeFilePath = file;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
         _configType = ConfigType.JSON;
@@ -166,6 +171,7 @@ public sealed class Config : IConfig, IDisposable
     internal Dictionary<string, ConfigSetting> Settings => _settings;
     internal ConfigType FileType => _configType;
     internal string JsonFilePath { get; } = "";
+    internal string RelativeFilePath { get; } = "";
     internal string Domain => _domain;
     internal string ModName => _modName;
 

@@ -18,7 +18,7 @@
 
   <!-- Dependencies -->
   <ItemGroup>
-    <Dependencies Include="vsimgui" Version="1.1.13" />
+    <Dependencies Include="vsimgui" Version="1.1.12" />
   </ItemGroup>
 
   <!-- Project settings -->
