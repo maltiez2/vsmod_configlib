@@ -13,7 +13,7 @@ using YamlDotNet.Serialization;
 
 namespace ConfigLib;
 
-public sealed class Config : IConfig, IDisposable
+public sealed class Config : IContentConfig, IDisposable
 {
     public string ConfigFilePath { get; private set; }
     public int Version { get; private set; }
@@ -785,7 +785,6 @@ public sealed class Config : IConfig, IDisposable
         _configFileWatcher.EnableRaisingEvents = true;
 
         int initialDelay = Math.Abs(Path.GetFileName(ConfigFilePath).GetHashCode()) % _fileChangeCheckIntervalMs;
-
         _fileChangedListener = _api.World.RegisterGameTickListener(_ => OnFileChanged(), _fileChangeCheckIntervalMs, initialDelay);
     }
     private bool CheckIfFileChanged()
@@ -798,6 +797,7 @@ public sealed class Config : IConfig, IDisposable
             return true;
         }
     }
+
     private void FileEventHandler(object sender, FileSystemEventArgs eventArgs)
     {
         if (eventArgs.ChangeType != WatcherChangeTypes.Changed && eventArgs.ChangeType != WatcherChangeTypes.Created)

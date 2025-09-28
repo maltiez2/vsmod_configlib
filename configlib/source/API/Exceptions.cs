@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace ConfigLib;
+﻿namespace ConfigLib;
 
 public class ConfigLibException : Exception
 {

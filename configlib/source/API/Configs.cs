@@ -1,4 +1,6 @@
-﻿namespace ConfigLib;
+﻿using Vintagestory.API.Common;
+
+namespace ConfigLib;
 
 /// <summary>
 /// Provides methods for accessing configs and settings
@@ -83,6 +85,13 @@ public interface IConfig
     /// Sets all settings to default values<br/>In multiplayer on client sets values only of client side settings.
     /// </summary>
     void RestoreToDefaults();
+}
+
+/// <summary>
+/// Represents a config made the content modding way
+/// </summary>
+public interface IContentConfig : IConfig
+{
     /// <summary>
     /// Returns settings by given code.<br/>Setting code, specified either in 'code' field of the setting or by key in 'settings'.
     /// </summary>
@@ -98,4 +107,66 @@ public interface IConfig
     /// </summary>
     /// <param name="target"></param>
     void AssignSettingsValues(object target);
+}
+
+/// <summary>
+/// Represents a config with an actual associated type
+/// </summary>
+public interface ITypedConfig : IConfig
+{
+    /// <summary>
+    /// Which mod the config originates from (can potentially be null for auto configs)
+    /// </summary>
+    Mod? Source { get; }
+
+    /// <summary>
+    /// Which side this config should be loaded on, by default this is <see cref="EnumAppSide.Universal"/>.
+    /// </summary>
+    EnumAppSide Side { get; init; }
+
+    /// <summary>
+    /// Whether the config should be synchronized from server to client, by default this is true though it is only relevant if <see cref="Side"/> is <see cref="EnumAppSide.Universal"/>
+    /// </summary>
+    bool ShouldSynchronize { get; init; }
+
+    /// <summary>
+    /// The loaded instance of the config type
+    /// </summary>
+    object Instance { get; }
+
+    /// <summary>
+    /// The type of the config instance
+    /// </summary>
+    Type Type { get; }
+
+    /// <summary>
+    /// Path to the config file relative to the config directory
+    /// </summary>
+    string RelativeConfigFilePath { get; }
+
+    /// <summary>
+    /// True if this is our own config file, false if this config file was sent over from a server
+    /// </summary>
+    bool IsOwnConfigFile();
+}
+
+/// <inheritdoc/>
+/// <typeparam name="TConfigClass">The class of the underlying config</typeparam>
+public interface ITypedConfig<TConfigClass> : ITypedConfig where TConfigClass : class
+{
+    /// <summary>
+    /// The loaded instance of the config type
+    /// </summary>
+    new TConfigClass Instance { get; }
+
+    object ITypedConfig.Instance => Instance;
+
+    Type ITypedConfig.Type => typeof(TConfigClass);
+
+    /// <summary>
+    /// Called when the config changes instance <br/>
+    /// WARNING: this is not called for Auto Configs
+    /// </summary>
+    event ConfigChangedDelegate? OnConfigChanged;
+    public delegate void ConfigChangedDelegate(TConfigClass oldConfig, TConfigClass newConfig);
 }
