@@ -10,7 +10,6 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.API.Util;
 using VSImGui;
-using YamlDotNet.Core.Tokens;
 
 namespace ConfigLib;
 
@@ -499,8 +498,8 @@ internal class ConfigWindow
         }
 
         DrawHint(setting);
-       
-        
+
+
         ImGui.PopItemWidth();
 
         if (!_api.IsSinglePlayer && !setting.ClientSide && !_api.World.Player.HasPrivilege(Privilege.controlserver)) ImGui.EndDisabled();

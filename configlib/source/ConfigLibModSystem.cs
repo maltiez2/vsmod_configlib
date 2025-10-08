@@ -262,6 +262,12 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         byte[] data = asset.Data;
         data = System.Text.Encoding.Convert(System.Text.Encoding.UTF8, System.Text.Encoding.Unicode, data);
         string json = System.Text.Encoding.Unicode.GetString(data);
+        int startIndex = 0;
+        if (json.Contains('{'))
+        {
+            startIndex = json.IndexOf('{');
+        }
+        json = json.Substring(startIndex, json.Length - startIndex);
         JObject token = JObject.Parse(json);
         JsonObject parsedConfig = new(token);
 
