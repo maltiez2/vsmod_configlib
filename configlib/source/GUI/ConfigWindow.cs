@@ -406,7 +406,7 @@ internal class ConfigWindow
                 )
             )
             {
-                DrawSetting(setting);
+                DrawSetting(setting, config.Domain);
             }
 
             if (block is IFormattingBlock formatting)
@@ -430,7 +430,7 @@ internal class ConfigWindow
         }
     }
 
-    private void DrawSetting(ConfigSetting setting)
+    private void DrawSetting(ConfigSetting setting, string domain)
     {
         string name = setting.InGui ?? setting.YamlCode;
 
@@ -470,7 +470,7 @@ internal class ConfigWindow
 
         if (setting.Validation != null)
         {
-            DrawValidatedSetting(name, setting);
+            DrawValidatedSetting(name, setting, domain);
         }
         else
         {
@@ -498,8 +498,8 @@ internal class ConfigWindow
         }
 
         DrawHint(setting);
-       
-        
+
+
         ImGui.PopItemWidth();
 
         if (!_api.IsSinglePlayer && !setting.ClientSide && !_api.World.Player.HasPrivilege(Privilege.controlserver)) ImGui.EndDisabled();
@@ -531,7 +531,7 @@ internal class ConfigWindow
         DrawItemHint($"open in browser: {setting.Link}");
     }
 
-    private void DrawValidatedSetting(string name, ConfigSetting setting)
+    private void DrawValidatedSetting(string name, ConfigSetting setting, string domain)
     {
         bool mapping = setting.Validation?.Mapping != null;
         bool values = setting.Validation?.Values != null;
@@ -539,7 +539,7 @@ internal class ConfigWindow
 
         if (mapping)
         {
-            DrawMappingSetting(name, setting);
+            DrawMappingSetting(name, setting, domain);
         }
         else if (values)
         {
@@ -555,11 +555,12 @@ internal class ConfigWindow
         }
     }
 
-    private void DrawMappingSetting(string name, ConfigSetting setting)
+    private void DrawMappingSetting(string name, ConfigSetting setting, string domain)
     {
         if (setting.Validation?.Mapping == null || setting.MappingKey == null) return;
         string[] values = setting.Validation.Mapping.Keys.ToArray();
-        setting.MappingKey = values[DrawComboBox(Title(name), setting.MappingKey, values, setting)];
+        string[] translatedValues = values.Select(key => Lang.GetIfExists($"{domain}:mappingkey-{key}") ?? key).ToArray();
+        setting.MappingKey = values[DrawComboBox(Title(name), Lang.GetIfExists($"{domain}:mappingkey-{setting.MappingKey}") ?? setting.MappingKey, translatedValues, setting)];
     }
 
     private void DrawValuesSetting(string name, ConfigSetting setting)
