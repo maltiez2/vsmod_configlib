@@ -6,25 +6,32 @@ using Vintagestory.API.Common;
 using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.Server;
-using Vintagestory.API.Util;
-using Vintagestory.Common;
 
 namespace ConfigLib;
 
-public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
+public sealed partial class ConfigLibModSystem : ModSystem, IConfigProvider
 {
     public const string HarmonyId = "configlib";
 
-    public IEnumerable<string> Domains => _domains;
+    public IEnumerable<string> Domains => _contentConfigDomains;
     public IConfig? GetConfig(string domain) => GetConfigImpl(domain);
     public ISetting? GetSetting(string domain, string code) => GetConfigImpl(domain)?.GetSetting(code);
+
+    //TODO public TypedConfig<TConfigClass> RegisterTypedConfig<TConfigClass>(...)
+
+    //public TTypedConfig RegisterTypedConfig<TTypedConfig>(TTypedConfig typedConfig) where TTypedConfig : ITypedConfig
+    //{
+    //    _typedConfigs.Add(typedConfig.RelativeConfigFilePath, typedConfig);
+    //    return typedConfig;
+    //}
+    
     public void RegisterCustomConfig(string domain, Action<string, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, DrawDelegateWrapper(drawDelegate));
     public void RegisterCustomConfig(string domain, System.Func<string, ControlButtons, ControlButtons> drawDelegate) => _customConfigs.TryAdd(domain, drawDelegate);
     public void RegisterCustomManagedConfig(string domain, object configObject, string? path = null, Action? onSyncedFromServer = null, Action<string>? onSettingChanged = null, Action? onConfigSaved = null)
     {
         if (_api == null) return;
 
-        if (!_canRegisterNewConfig)
+        if (!_registry.CanRegisterNewConfig)
         {
             LoggerUtil.Error(_api, this, $"Cant register custom managed config '{domain}': too late, configs have been already sent to clients");
             return;
@@ -32,8 +39,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         Config config = new(_api, domain, _api.ModLoader.GetMod(domain)?.Info.Name ?? Lang.Get(domain), configObject, path ?? domain + ".json");
 
-        _configs.Add(domain, config);
-        _domains.Add(domain);
+        _contentConfigs.Add(domain, config);
+        _contentConfigDomains.Add(domain);
         _configsToRegister.Add(domain, config);
 
         if (_api.Side == EnumAppSide.Server)
@@ -84,33 +91,39 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     /// </summary>
     public event Action? ConfigsLoaded;
 
-    internal HashSet<string> GetDomains() => _domains;
-    internal Config? GetConfigImpl(string domain) => _configs?.ContainsKey(domain) == true ? _configs[domain] : null;
+    internal HashSet<string> GetDomains() => _contentConfigDomains;
+    internal Config? GetConfigImpl(string domain) => _contentConfigs?.ContainsKey(domain) == true ? _contentConfigs[domain] : null;
     internal Dictionary<string, System.Func<string, ControlButtons, ControlButtons>>? GetCustomConfigs() => _customConfigs;
 
-    private readonly Dictionary<string, Config> _configs = new();
-    private readonly HashSet<string> _domains = new();
+    private static readonly Dictionary<string, ITypedConfig> _typedConfigs = new();
+    private readonly Dictionary<string, Config> _contentConfigs = new();
     private readonly Dictionary<string, System.Func<string, ControlButtons, ControlButtons>> _customConfigs = new();
-    private readonly Dictionary<string, Config> _configsToRegister = [];
+
+    private readonly HashSet<string> _contentConfigDomains = new();
     private readonly HashSet<string> _customManagedConfigs = [];
+
+    private readonly Dictionary<string, Config> _configsToRegister = [];
 
     private GuiManager? _guiManager;
     private ICoreAPI? _api;
-    private const string _registryCode = "configlib:configs";
-    private ConfigRegistry? _registry;
+
+    internal readonly ConfigRegistry _registry = new();
     private IClientNetworkChannel? _eventsChannel;
     private IServerNetworkChannel? _eventsServerChannel;
     private const string _channelName = "configlib:events";
-    private bool _canRegisterNewConfig = true;
 
     public override void StartPre(ICoreAPI api)
     {
         _api = api;
+
+        if(api.Side == EnumAppSide.Client)
+        {
+            _registry.ExtractFromWorldConfig(api.World);
+        }
     }
 
     public override void Start(ICoreAPI api)
     {
-        _registry = api.RegisterRecipeRegistry<ConfigRegistry>(_registryCode);
         api.Event.RegisterEventBusListener(ReloadJsonConfigs, filterByEventName: ConfigReloadEvent);
 
         var harmony = new Harmony(HarmonyId);
@@ -122,7 +135,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         if (api.Side == EnumAppSide.Client)
         {
             harmony.PatchCategory("client");
-            ConfigRegistry.ConfigsLoaded += ReloadConfigs;
+
             _eventsChannel = (api as ICoreClientAPI)?.Network.RegisterChannel(_channelName)
                 .RegisterMessageType<ConfigEventPacket>()
                 .RegisterMessageType<ServerSideSettingChanged>()
@@ -143,8 +156,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     public override void AssetsLoaded(ICoreAPI api)
     {
         LoadConfigs();
-        _api?.Logger.Notification($"[Config lib] Configs loaded: {_configs.Count}");
-        foreach ((_, Config config) in _configs)
+        _api?.Logger.Notification($"[Config lib] Content configs loaded: {_contentConfigs.Count}");
+        foreach ((_, Config config) in _contentConfigs)
         {
             config.Apply();
         }
@@ -156,25 +169,31 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     {
         new Harmony(HarmonyId).UnpatchAll(HarmonyId);
 
-        foreach ((_, Config config) in _configs)
+        foreach ((_, Config config) in _contentConfigs)
         {
             config.Dispose();
         }
 
-        _configs.Clear();
-        _domains.Clear();
+        _contentConfigs.Clear();
+        _contentConfigDomains.Clear();
         _customConfigs.Clear();
-        if (_api?.Side == EnumAppSide.Client)
+
+        //TODO change cleanup logic
+        if(_api is not ICoreClientAPI { IsSinglePlayer: true })
         {
-            _guiManager?.Dispose();
-            ConfigRegistry.ConfigsLoaded -= ReloadConfigs;
+            foreach(var disposableConfigs in _typedConfigs.Values.OfType<IDisposable>())
+            {
+                disposableConfigs.Dispose();
+            }
+            _typedConfigs.Clear();
         }
-        _registry = null;
+
+        _guiManager?.Dispose();
         _guiManager = null;
 
         base.Dispose();
     }
-
+    
     private static System.Func<string, ControlButtons, ControlButtons> DrawDelegateWrapper(Action<string, ControlButtons> callback)
     {
         return (domain, buttons) =>
@@ -184,17 +203,19 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         };
     }
 
-    private void ReloadConfigs(Dictionary<string, Config> configs)
+    //TODO
+    private void ReloadConfigs(Dictionary<string, IConfig> configs)
     {
         _api?.Logger.Notification($"[Config lib] Configs received from server: {configs.Count}");
 
-        foreach ((string domain, Config config) in configs)
+        foreach ((string domain, IConfig iconfig) in configs)
         {
+            if(iconfig is not Config config) continue; //TODO
             if (_customManagedConfigs.Contains(domain))
             {
-                _configs[domain].SyncFromServer(config, (_api as ICoreClientAPI)?.IsSinglePlayer == true);
-                _configs[domain].ConfigSaved += OnConfigSaved;
-                foreach ((string code, ConfigSetting setting) in _configs[domain].Settings)
+                _contentConfigs[domain].SyncFromServer(config, (_api as ICoreClientAPI)?.IsSinglePlayer == true);
+                _contentConfigs[domain].ConfigSaved += OnConfigSaved;
+                foreach ((string code, ConfigSetting setting) in _contentConfigs[domain].Settings)
                 {
                     setting.SettingChanged += (value) => OnSettingChanged(domain, code, value);
                     OnSettingLoaded(domain, code, setting);
@@ -202,8 +223,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
                 continue;
             }
 
-            _domains.Add(domain);
-            _configs[domain] = config;
+            _contentConfigDomains.Add(domain);
+            _contentConfigs[domain] = config;
             config.Apply();
 
             config.ConfigSaved += OnConfigSaved;
@@ -230,17 +251,16 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
         ConfigsLoaded?.Invoke();
     }
+
     private void LoadConfigs()
     {
         if (_api == null) return;
-
-        ConfigRegistry? registry = _registry ?? GetRegistry(_api);
 
         foreach (IAsset asset in _api.Assets.GetMany(AssetCategory.config.Code).Where((asset) => asset.Name == "configlib-patches.json"))
         {
             try
             {
-                LoadConfig(asset, registry);
+                LoadConfig(asset, _registry);
             }
             catch (Exception exception)
             {
@@ -253,14 +273,13 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         {
             foreach ((string domain, Config config) in _configsToRegister)
             {
-                registry?.Register(domain, config);
+                _registry.Register(_api, config);
             }
             _configsToRegister.Clear();
         }
-
-        ConfigRegistry.OnToBytes += () => _canRegisterNewConfig = false;
     }
-    private void LoadConfig(IAsset asset, ConfigRegistry? registry)
+
+    private void LoadConfig(IAsset asset, ConfigRegistry registry)
     {
         if (_api == null) return;
 
@@ -281,10 +300,10 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
             config = new(_api, domain, _api.ModLoader.GetMod(domain)?.Info.Name ?? Lang.Get(domain), parsedConfig);
         }
 
-        _configs.Add(domain, config);
-        _domains.Add(domain);
+        _contentConfigs.Add(domain, config);
+        _contentConfigDomains.Add(domain);
 
-        registry?.Register(domain, config);
+        registry.Register(_api, config);
 
         if (_api.Side == EnumAppSide.Server)
         {
@@ -297,10 +316,6 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         }
 
         config.SettingChanged += setting => SettingChanged?.Invoke(domain, config, setting);
-    }
-    private static ConfigRegistry? GetRegistry(ICoreAPI api)
-    {
-        return (api.World as GameMain)?.GetRecipeRegistry(_registryCode) as ConfigRegistry;
     }
 
     private void OnConfigSaved(Config config)
@@ -381,11 +396,13 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         string eventName = string.Format(ConfigLoadedEvent, domain);
         _api?.Event.PushEvent(eventName, eventDataTree);
     }
+    
     private void ReloadJsonConfigs(string eventName, ref EnumHandling handling, IAttribute data)
     {
         string domain = (data as ITreeAttribute)?.GetAsString("domain") ?? "";
-        _configs[domain].ReadFromFile();
+        _contentConfigs[domain].ReadFromFile();
     }
+
     private void OnServerSettingChanged(IServerPlayer player, ServerSideSettingChanged packet)
     {
         if (!packet.Settings.Any()) return;

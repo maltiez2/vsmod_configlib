@@ -29,8 +29,8 @@ public sealed class Config : IContentConfig, IDisposable
         _modName = modName;
         _json = json;
 
-        RelativeFilePath = $"{_domain}.yaml";
-        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", RelativeFilePath);
+        RelativeConfigFilePath = $"{_domain}.yaml";
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", RelativeConfigFilePath);
 
         try
         {
@@ -57,8 +57,8 @@ public sealed class Config : IContentConfig, IDisposable
         _modName = modName;
         _json = json;
 
-        RelativeFilePath = $"{_domain}.yaml";
-        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", RelativeFilePath);
+        RelativeConfigFilePath = $"{_domain}.yaml";
+        ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", RelativeConfigFilePath);
 
         try
         {
@@ -84,10 +84,10 @@ public sealed class Config : IContentConfig, IDisposable
         _domain = domain;
         _modName = modName;
         _json = json;
-        RelativeFilePath = file;
+        RelativeConfigFilePath = file;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
-        _configType = ConfigType.JSON;
+        _configType = EnumConfigType.JSON;
 
         try
         {
@@ -112,10 +112,10 @@ public sealed class Config : IContentConfig, IDisposable
         _domain = domain;
         _modName = modName;
         _json = json;
-        RelativeFilePath = file;
+        RelativeConfigFilePath = file;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
-        _configType = ConfigType.JSON;
+        _configType = EnumConfigType.JSON;
         JsonFilePath = file;
 
         try
@@ -141,10 +141,10 @@ public sealed class Config : IContentConfig, IDisposable
         _domain = domain;
         _modName = modName;
         _json = DefinitionFromObject(configObject, domain);
-        RelativeFilePath = file;
+        RelativeConfigFilePath = file;
         ConfigFilePath = Path.Combine(_api.DataBasePath, "ModConfig", file);
         JsonFilePath = ConfigFilePath;
-        _configType = ConfigType.JSON;
+        _configType = EnumConfigType.JSON;
 
         try
         {
@@ -169,11 +169,11 @@ public sealed class Config : IContentConfig, IDisposable
     internal JsonObject Definition => _json;
     internal SortedDictionary<float, IConfigBlock> ConfigBlocks => _configBlocks;
     internal Dictionary<string, ConfigSetting> Settings => _settings;
-    internal ConfigType FileType => _configType;
+    public EnumConfigType ConfigType => _configType;
     internal string JsonFilePath { get; } = "";
-    internal string RelativeFilePath { get; } = "";
-    internal string Domain => _domain;
-    internal string ModName => _modName;
+    public string RelativeConfigFilePath { get; }
+    public string Domain => _domain;
+    public string ModName => _modName;
 
     public ISetting? GetSetting(string code)
     {
@@ -188,7 +188,7 @@ public sealed class Config : IContentConfig, IDisposable
 
             switch (_configType)
             {
-                case ConfigType.YAML:
+                case EnumConfigType.YAML:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         content = ToYaml(_clientSideSettings.Values);
@@ -198,7 +198,7 @@ public sealed class Config : IContentConfig, IDisposable
                         content = ToYaml(_settings.Values);
                     }
                     break;
-                case ConfigType.JSON:
+                case EnumConfigType.JSON:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         content = ToJson(_settings.Values, ReadConfigFile(_defaultJson, false), onlyClientSide: true);
@@ -228,7 +228,7 @@ public sealed class Config : IContentConfig, IDisposable
 
             switch (_configType)
             {
-                case ConfigType.YAML:
+                case EnumConfigType.YAML:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         return FromYaml(_clientSideSettings.Values, content);
@@ -237,7 +237,7 @@ public sealed class Config : IContentConfig, IDisposable
                     {
                         return FromYaml(_settings.Values, content);
                     }
-                case ConfigType.JSON:
+                case EnumConfigType.JSON:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         return FromJson(_settings.Values, content, onlyClientSide: true);
@@ -264,7 +264,7 @@ public sealed class Config : IContentConfig, IDisposable
 
             switch (_configType)
             {
-                case ConfigType.YAML:
+                case EnumConfigType.YAML:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         return FromYaml(_clientSideSettings.Values, content);
@@ -273,7 +273,7 @@ public sealed class Config : IContentConfig, IDisposable
                     {
                         return FromYaml(_settings.Values, content);
                     }
-                case ConfigType.JSON:
+                case EnumConfigType.JSON:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         return FromJson(_settings.Values, content, onlyClientSide: true);
@@ -298,7 +298,7 @@ public sealed class Config : IContentConfig, IDisposable
         {
             switch (_configType)
             {
-                case ConfigType.YAML:
+                case EnumConfigType.YAML:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         FromYaml(_clientSideSettings.Values, _defaultYaml);
@@ -308,7 +308,7 @@ public sealed class Config : IContentConfig, IDisposable
                         FromYaml(_settings.Values, _defaultYaml);
                     }
                     break;
-                case ConfigType.JSON:
+                case EnumConfigType.JSON:
                     if (_api is ICoreClientAPI { IsSinglePlayer: false })
                     {
                         FromJson(_settings.Values, _defaultJson, onlyClientSide: true);
@@ -379,13 +379,6 @@ public sealed class Config : IContentConfig, IDisposable
         }
     }
 
-
-    internal enum ConfigType
-    {
-        YAML,
-        JSON
-    }
-
     private readonly ICoreAPI _api;
     private readonly string _domain;
     private readonly string _modName;
@@ -396,7 +389,7 @@ public sealed class Config : IContentConfig, IDisposable
     private readonly ConfigPatches _patches;
     private readonly string _defaultYaml = "";
     private readonly string _defaultJson = "{}";
-    private readonly ConfigType _configType = ConfigType.YAML;
+    private readonly EnumConfigType _configType = EnumConfigType.YAML; 
     private FileSystemWatcher? _configFileWatcher;
     private bool _disposedValue;
     private readonly object _fileChangedLockObject = new();

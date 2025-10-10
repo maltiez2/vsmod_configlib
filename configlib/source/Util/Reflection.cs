@@ -61,4 +61,11 @@ internal static class Reflection
             field.SetValue(destination, field.GetValue(source));
         }
     }
+
+    internal static void TryDispose(this object obj)
+    {
+        if(obj is not IDisposable disposable) return;
+
+        disposable.Dispose();
+    }
 }

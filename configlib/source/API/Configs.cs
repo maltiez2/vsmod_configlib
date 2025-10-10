@@ -62,12 +62,25 @@ public interface IConfigProvider
     event Action<string, IConfig, ISetting>? SettingChanged;
 }
 
+public enum EnumConfigType
+{
+    YAML,
+    JSON,
+    CODE
+}
+
 public interface IConfig
 {
     /// <summary>
     /// Full path to loaded config file.<br/>In multiplayer on client is equal to path of client side config.
     /// </summary>
     string ConfigFilePath { get; }
+
+    /// <summary>
+    /// Path to the config file relative to the config directory
+    /// </summary>
+    string RelativeConfigFilePath { get; }
+
     /// <summary>
     /// Version of loaded config file.<br/>In multiplayer on client is equal to version of client side config.
     /// </summary>
@@ -85,6 +98,8 @@ public interface IConfig
     /// Sets all settings to default values<br/>In multiplayer on client sets values only of client side settings.
     /// </summary>
     void RestoreToDefaults();
+
+    public EnumConfigType ConfigType { get; }
 }
 
 /// <summary>
@@ -92,6 +107,16 @@ public interface IConfig
 /// </summary>
 public interface IContentConfig : IConfig
 {
+    /// <summary>
+    /// The domain of the config definition
+    /// </summary>
+    string Domain { get; }
+
+    /// <summary>
+    /// The mod this config belongs to
+    /// </summary>
+    string ModName { get; }
+
     /// <summary>
     /// Returns settings by given code.<br/>Setting code, specified either in 'code' field of the setting or by key in 'settings'.
     /// </summary>
@@ -140,19 +165,26 @@ public interface ITypedConfig : IConfig
     Type Type { get; }
 
     /// <summary>
-    /// Path to the config file relative to the config directory
+    /// True if this config was automatically intercepted and forcibly added to config lib
     /// </summary>
-    string RelativeConfigFilePath { get; }
+    bool IsAutoConfig { get; }
 
     /// <summary>
     /// True if this is our own config file, false if this config file was sent over from a server
     /// </summary>
     bool IsOwnConfigFile();
+
+    /// <summary>
+    /// Call after modifying config to trigger the <see cref="ITypedConfig{TConfigClass}.OnConfigChanged"/> listeners
+    /// </summary>
+    void ConfigChanged();
+
+    EnumConfigType IConfig.ConfigType => EnumConfigType.CODE;
 }
 
 /// <inheritdoc/>
 /// <typeparam name="TConfigClass">The class of the underlying config</typeparam>
-public interface ITypedConfig<TConfigClass> : ITypedConfig where TConfigClass : class
+public interface ITypedConfig<out TConfigClass> : ITypedConfig where TConfigClass : class
 {
     /// <summary>
     /// The loaded instance of the config type
@@ -164,9 +196,8 @@ public interface ITypedConfig<TConfigClass> : ITypedConfig where TConfigClass : 
     Type ITypedConfig.Type => typeof(TConfigClass);
 
     /// <summary>
-    /// Called when the config changes instance <br/>
+    /// Called when something changes about the config<br/>
     /// WARNING: this is not called for Auto Configs
     /// </summary>
-    event ConfigChangedDelegate? OnConfigChanged;
-    public delegate void ConfigChangedDelegate(TConfigClass oldConfig, TConfigClass newConfig);
+    event Action<TConfigClass>? OnConfigChanged;
 }

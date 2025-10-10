@@ -1,5 +1,4 @@
 ﻿using configlib.source.Util;
-using Newtonsoft.Json;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
@@ -8,7 +7,7 @@ namespace ConfigLib;
 
 public sealed class TypedConfig<TConfigClass> : ITypedConfig<TConfigClass>, IDisposable where TConfigClass : class, new()
 {
-    internal TypedConfig(ICoreAPI api, Mod source, string relativeConfigFilePath, byte[]? dataFromServer = null)
+    internal TypedConfig(ICoreAPI api, Mod? source, string relativeConfigFilePath, TConfigClass? instance = null)
     {
         _api = api;
         Source = source;
@@ -21,33 +20,36 @@ public sealed class TypedConfig<TConfigClass> : ITypedConfig<TConfigClass>, IDis
 
         RelativeConfigFilePath = relativeConfigFilePath;
 
-        if (IsOwnConfigFile())
+        if(instance is not null)
+        {
+            Instance = instance;
+        }
+        else if (IsOwnConfigFile())
         {
             ReadFromFile();
             WriteToFile();
-            try
+            if (!IsAutoConfig)
             {
-                ConfigFileWatcher = new(api, this);
+                try
+                {
+                    ConfigFileWatcher = new(api, this);
+                }
+                catch(Exception exception)
+                {
+                    _api.Logger.Warning("[Config lib] [mod: {0}] Failed to create file watcher. Automatic updates when file is changed on disc will not work! path: '{1}', error: {2}", Source?.Info.Name ?? "unknown", ConfigFilePath, exception);
+                }
             }
-            catch(Exception exception)
-            {
-                _api.Logger.Warning("[Config lib] [mod: {0}] Failed to create file watcher. Automatic updates when file is changed on disc will not work! path: '{1}', error: {2}", Source?.Info.Name ?? "Unkown", ConfigFilePath, exception);
-            }
-        }
-        else if(dataFromServer is not null)
-        {
-            ReadFromServerData(dataFromServer);
         }
 
         if(_instance is null)
         {
-            throw new ConfigLibException($"[Config lib] [mod: {Source?.Info.Name ?? "Unknown"}] no config data was loaded for '{ConfigFilePath}'");
+            throw new ConfigLibException($"[Config lib] [mod: {Source?.Info.Name ?? "unknown"}] no config data was loaded for '{ConfigFilePath}'");
         }
     }
 
     private readonly ICoreAPI _api;
 
-    public bool IsAutoConfig { get; internal init; } = false;
+    public bool IsAutoConfig { get; internal init; } = false;  
 
     public Mod? Source { get; }
 
@@ -76,26 +78,26 @@ public sealed class TypedConfig<TConfigClass> : ITypedConfig<TConfigClass>, IDis
                 return;
             }
 
-            var oldInstance = _instance;
             _instance = value;
-
-            try
-            {
-                OnConfigChanged?.Invoke(oldInstance, value);
-            }
-            catch(Exception exception)
-            {
-                _api.Logger.Error("[Config lib] [mod: {0}] An error occured during the OnConfigChanged event of '{1}', error: {2}", Source?.Info.Name ?? "Unkown", ConfigFilePath, exception);
-            }
-
-            if(oldInstance is IDisposable disposableConfig)
-            {
-                disposableConfig.Dispose();
-            }
+            ConfigChanged();
         }
     }
 
-    public event ITypedConfig<TConfigClass>.ConfigChangedDelegate? OnConfigChanged;
+    public void ConfigChanged()
+    {
+        if(IsAutoConfig) return;
+
+        try
+        {
+            OnConfigChanged?.Invoke(Instance);
+        }
+        catch(Exception exception)
+        {
+            _api.Logger.Error("[Config lib] [mod: {0}] An error occured during the OnConfigChanged event of '{1}', error: {2}", Source?.Info.Name ?? "unknown", ConfigFilePath, exception);
+        }
+    }
+
+    public event Action<TConfigClass>? OnConfigChanged;
     //TODO syncing config to joined clients!
 
     public System.Func<TConfigClass, int>? VersionProvider { get; init; }
@@ -127,29 +129,19 @@ public sealed class TypedConfig<TConfigClass> : ITypedConfig<TConfigClass>, IDis
         }
         catch(Exception exception)
         {
-            _api.Logger.Error("[Config lib] [mod: {0}] An error occured while reading config file at '{1}' will use default settings, error: {2}", Source?.Info.Name ?? "Unkown", ConfigFilePath, exception);
+            _api.Logger.Error("[Config lib] [mod: {0}] An error occured while reading config file at '{1}' will use default settings, error: {2}", Source?.Info.Name ?? "unknown", ConfigFilePath, exception);
             newConfig = new();
         }
 
         if(newConfig is null)
         {
-            _api.Logger.Notification("[Config lib] [mod: {0}] Creating default settings file at '{1}'", Source?.Info.Name ?? "Unkown", ConfigFilePath);
+            _api.Logger.Notification("[Config lib] [mod: {0}] Creating default settings file at '{1}'", Source?.Info.Name ?? "unknown", ConfigFilePath);
             newConfig = new();
         }
 
         Instance = newConfig;
         
         return true;
-    }
-
-    private void ReadFromServerData(byte[] dataFromServer)
-    {
-        using var stream = new MemoryStream(dataFromServer);
-        using var streamReader = new StreamReader(stream);
-        using var jsonTextReader = new JsonTextReader(streamReader);
-        var serializer = JsonSerializer.CreateDefault();
-        Instance = serializer.Deserialize<TConfigClass>(jsonTextReader) ?? throw new InvalidConfigException($"[Config lib] [mod: {Source?.Info.Name ?? "Unknown"}] config received from server could not be deserialized for '{ConfigFilePath}'");
-
     }
 
     public void WriteToFile()
