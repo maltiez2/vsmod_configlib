@@ -789,7 +789,9 @@ public sealed class Config : IConfig, IDisposable
             catch (Exception exception)
             {
                 string combined = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
-                LoggerUtil.Error(_api, this, $"[config domain: {_domain}] Failed to create file watcher. Automatic updates when file is changed on disc will not work.\nPaths:\n  data: {_api.DataBasePath}\n  combined: {combined}\nException:\n{exception}");
+                LoggerUtil.Error(_api, this, $"Failed to create file watcher. Automatic updates when files are changed on disc will not work.");
+                LoggerUtil.Verbose(_api, this, $"[config domain: {_domain}] Failed to create file watcher. Automatic updates when file is changed on disc will not work.\nPaths:\n  data: {_api.DataBasePath}\n  combined: {combined}\nException:\n{exception}\n");
+                _fileWatchers.Add(directory, null);
                 return;
             }
         }
