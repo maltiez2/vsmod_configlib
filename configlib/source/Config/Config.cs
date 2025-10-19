@@ -403,6 +403,8 @@ public sealed class Config : IConfig, IDisposable
     private bool _fileChanged = false; // protected by _fileOperationLockObject
     private long _fileChangedListener = 0;
     private const int _fileChangeCheckIntervalMs = 2000;
+    private static Dictionary<string, FileSystemWatcher?> _fileWatchers = [];
+    private static Dictionary<string, List<Config>> _configsByPath = [];
 
     private void SubscribeToSettingsChanges()
     {
@@ -772,27 +774,38 @@ public sealed class Config : IConfig, IDisposable
             return;
         }
 
-        try
+        if (!_fileWatchers.TryGetValue(directory, out _configFileWatcher))
         {
-            _configFileWatcher = new(directory);
+            try
+            {
+                _configFileWatcher = new(directory);
+                _configFileWatcher.Changed += FileEventHandler;
+                _configFileWatcher.Created += FileEventHandler;
+                _configFileWatcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastWrite;
+                _configFileWatcher.Error += (_, e) => Debug.WriteLine(e.GetException());
+                _configFileWatcher.EnableRaisingEvents = true;
+                _fileWatchers.Add(directory, _configFileWatcher);
+            }
+            catch (Exception exception)
+            {
+                string combined = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
+                LoggerUtil.Error(_api, this, $"[config domain: {_domain}] Failed to create file watcher. Automatic updates when file is changed on disc will not work.\nPaths:\n  data: {_api.DataBasePath}\n  combined: {combined}\nException:\n{exception}");
+                return;
+            }
         }
-        catch (Exception exception)
-        {
-            string combined = Path.Combine(_api.DataBasePath, "ModConfig", $"{_domain}.yaml");
-            LoggerUtil.Error(_api, this, $"[config domain: {_domain}] Failed to create file watcher. Automatic updates when file is changed on disc will not work.\nPaths:\n  data: {_api.DataBasePath}\n  combined: {combined}\nException:\n{exception}");
-            return;
-        }
-
-        _configFileWatcher.Changed += FileEventHandler;
-        _configFileWatcher.Created += FileEventHandler;
-        _configFileWatcher.Filter = Path.GetFileName(ConfigFilePath);
-        _configFileWatcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.LastWrite;
-        _configFileWatcher.Error += (_, e) => Debug.WriteLine(e.GetException());
-        _configFileWatcher.EnableRaisingEvents = true;
 
         int initialDelay = Math.Abs(Path.GetFileName(ConfigFilePath).GetHashCode()) % _fileChangeCheckIntervalMs;
 
         _fileChangedListener = _api.World.RegisterGameTickListener(_ => OnFileChanged(), _fileChangeCheckIntervalMs, initialDelay);
+
+        if (_configsByPath.TryGetValue(ConfigFilePath, out List<Config>? configs))
+        {
+            configs.Add(this);
+        }
+        else
+        {
+            _configsByPath.TryAdd(ConfigFilePath, [this]);
+        }
     }
     private bool CheckIfFileChanged()
     {
@@ -804,16 +817,26 @@ public sealed class Config : IConfig, IDisposable
             return true;
         }
     }
-    private void FileEventHandler(object sender, FileSystemEventArgs eventArgs)
+    private static void FileEventHandler(object sender, FileSystemEventArgs eventArgs)
     {
         if (eventArgs.ChangeType != WatcherChangeTypes.Changed && eventArgs.ChangeType != WatcherChangeTypes.Created)
         {
             return;
         }
 
-        lock (_fileChangedLockObject)
+        Debug.WriteLine($"File changed: {eventArgs.FullPath}");
+
+        if (_configsByPath.TryGetValue(eventArgs.FullPath, out List<Config>? configs))
         {
-            _fileChanged = true;
+            Debug.WriteLine($"Config changed ({configs.Count}): {eventArgs.FullPath}");
+
+            foreach (Config config in configs)
+            {
+                lock (config._fileChangedLockObject)
+                {
+                    config._fileChanged = true;
+                }
+            }
         }
     }
     private void OnFileChanged()
@@ -823,7 +846,6 @@ public sealed class Config : IConfig, IDisposable
             TryReadFromFile();
         }
     }
-
 
 
     private bool FromYaml(IEnumerable<ConfigSetting> settings, string yaml)
@@ -1187,9 +1209,9 @@ public sealed class Config : IConfig, IDisposable
     {
         if (!block.KeyExists("code"))
         {
-            throw new ArgumentException($"[Config lib] ({domain}) Setting has no code: {block.ToString()}");
+            throw new ArgumentException($"[Config lib] ({domain}) Setting has no code: {block}");
         }
-        
+
         string code = block["code"].AsString();
         ConfigSetting setting = ConfigSetting.FromJson(block, settingType, domain, code, _api);
         return (code, setting);
@@ -1217,6 +1239,8 @@ public sealed class Config : IConfig, IDisposable
             if (disposing)
             {
                 _configFileWatcher?.Dispose();
+                _configFileWatcher = null;
+                _configsByPath.Clear();
                 if (_fileChangedListener != 0)
                 {
                     _api.World.UnregisterGameTickListener(_fileChangedListener);
