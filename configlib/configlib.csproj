@@ -133,6 +133,7 @@
   <Target Name="ForceRebuild" BeforeTargets="BeforeBuild">
     <Touch Files="@(Compile)" AlwaysCreate="true" />
   </Target>
+
   <!-- Creates/updates modinfo.json file in build directory -->
   <Target Name="ModInfo" BeforeTargets="CopyFilesToOutput">
     <PropertyGroup>
