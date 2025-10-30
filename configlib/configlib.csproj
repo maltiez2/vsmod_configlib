@@ -2,7 +2,7 @@
   <!-- Mod info -->
   <PropertyGroup>
     <ModName>Config lib</ModName>
-    <Version>1.10.8</Version>
+    <ModVersion>1.10.8</ModVersion>
     <ModId>configlib</ModId>
     <Description>A universal place to configure your mods. Makes it possible for content mods to have configs too.</Description>
     <Side>universal</Side>
@@ -40,7 +40,7 @@
     <OutputPath>$(OutputDir)\$(ModId)</OutputPath>
     <ModIconFile>$(ProjectDir)\resources\modicon.png</ModIconFile>
     <ReleasesDir>$(ProjectDir)\Releases</ReleasesDir>
-    <ReleaseFile>$(ModId)_$(Version).zip</ReleaseFile>
+    <ReleaseFile>$(ModId)_$(ModVersion).zip</ReleaseFile>
     <ReleasePath>$(ReleasesDir)\$(ReleaseFile)</ReleasePath>
   </PropertyGroup>
 
@@ -142,7 +142,7 @@
     "type": "code",
     "name": "$(ModName)",
     "modid": "$(ModId)",
-    "version": "$(Version)",
+    "version": "$(ModVersion)",
 
     "description": "$(Description)",
     "authors": [ @(ModInfoAuthors->'"%(Identity)"', ', ') ],
