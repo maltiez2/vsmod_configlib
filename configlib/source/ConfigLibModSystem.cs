@@ -69,6 +69,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     public event Action? ConfigWindowClosed;
     public event Action? ConfigWindowOpened;
     public event Action<string, IConfig, ISetting>? SettingChanged;
+    [Obsolete]
+    public static event Action<ICoreAPI>? ConfigsChanged;
 
     public const string ConfigSavedEvent = "configlib:{0}:config-saved";
     public const string ConfigChangedEvent = "configlib:{0}:setting-changed";
@@ -138,6 +140,7 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         }
 
         ConfigsLoaded?.Invoke();
+        ConfigsChanged?.Invoke(api);
     }
     public override double ExecuteOrder() => 0.01;
     public override void Dispose()
