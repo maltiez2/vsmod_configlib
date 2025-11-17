@@ -819,7 +819,7 @@ public sealed class Config : IConfig, IDisposable
             return true;
         }
     }
-    private static void FileEventHandler(object sender, FileSystemEventArgs eventArgs)
+    private void FileEventHandler(object sender, FileSystemEventArgs eventArgs)
     {
         if (eventArgs.ChangeType != WatcherChangeTypes.Changed && eventArgs.ChangeType != WatcherChangeTypes.Created)
         {
@@ -828,18 +828,21 @@ public sealed class Config : IConfig, IDisposable
 
         Debug.WriteLine($"File changed: {eventArgs.FullPath}");
 
-        if (_configsByPath.TryGetValue(eventArgs.FullPath, out List<Config>? configs))
+        _api.Event.EnqueueMainThreadTask(() =>
         {
-            Debug.WriteLine($"Config changed ({configs.Count}): {eventArgs.FullPath}");
-
-            foreach (Config config in configs)
+            if (_configsByPath.TryGetValue(eventArgs.FullPath, out List<Config>? configs))
             {
-                lock (config._fileChangedLockObject)
+                Debug.WriteLine($"Config changed ({configs.Count}): {eventArgs.FullPath}");
+
+                foreach (Config config in configs)
                 {
-                    config._fileChanged = true;
+                    lock (config._fileChangedLockObject)
+                    {
+                        config._fileChanged = true;
+                    }
                 }
             }
-        }
+        }, "configlib");
     }
     private void OnFileChanged()
     {
