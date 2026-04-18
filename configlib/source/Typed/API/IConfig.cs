@@ -1,4 +1,5 @@
-﻿using Vintagestory.API.Common;
+﻿using configlib.source.Typed.Config;
+using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 
 namespace configlib.source.Typed.API;
@@ -62,6 +63,12 @@ public interface IConfigInfo
     /// The relevenat side of the config
     /// </summary>
     EnumAppSide RelevantSide { get; init; }
+
+    void RegisterModifiedListener(ConfigModifiedListener listener);
+    
+    bool UnregisterModifiedListener(ConfigModifiedListener listener);
+
+    void MarkPathDirty(ICoreAPI api, string modifiedPath, ILogger logger);
 
     /// <summary>
     /// Validates that the settings are as expected by the one requesting this config to be loaded.

@@ -10,4 +10,5 @@ public static class Globals
 public static class Events
 {
     public const string InitialConfigLoad = "configlib:InitialConfigLoad";
+    public const string ConfigPathDirty = "configlib:ConfigPathDirty";
 }

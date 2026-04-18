@@ -6,7 +6,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace configlib.source.Typed.Config;
 
@@ -42,6 +41,19 @@ public class Config<T> : ConfigInfo, IConfig<T> where T : notnull, new()
         serializer.Serialize(jsonWriter, Instance);
         
         tree.SetBytes(nameof(IConfig.Instance), ms.ToArray());
+    }
+
+    public void SaveConfig(ICoreAPI api, ILogger logger)
+    {
+        try
+        {
+            //TODO support documentation
+            api.StoreModConfig<T>(Instance, RelativePath);
+        }
+        catch(Exception ex)
+        {
+            logger.Error("Failed to save config at path '{0}', exception: {1}", RelativePath, ex);
+        }
     }
 }
 
@@ -127,6 +139,28 @@ public abstract class ConfigInfo : IConfigInfo
 
     public bool AllowDirectEdit { get; init; }
 
+    private readonly List<ConfigModifiedListener> _onModifiedListeners = [];
+
+    public void RegisterModifiedListener(ConfigModifiedListener listener) => _onModifiedListeners.Add(listener);
+
+    public bool UnregisterModifiedListener(ConfigModifiedListener listener) => _onModifiedListeners.Remove(listener);
+
+    public void MarkPathDirty(ICoreAPI api, string modifiedPath, ILogger logger)
+    {
+        foreach(var listener in _onModifiedListeners)
+        {
+            if (listener.Path != null && !listener.Path.StartsWith(modifiedPath, StringComparison.Ordinal)) continue;
+
+            listener.Action.InvokeSafe(logger, Events.ConfigPathDirty, this);
+        }
+
+        api.Event.PushEventSafe(logger, Events.ConfigPathDirty, new TreeAttribute
+        {
+            [nameof(RelativePath)] = new StringAttribute(RelativePath),
+            ["ModifiedPath"] = new StringAttribute(modifiedPath)
+        });
+    }
+
     public virtual void WriteToTreeAttribute(ITreeAttribute tree)
     {
         tree.SetString(nameof(IConfigInfo.RelativePath), RelativePath);
@@ -164,4 +198,14 @@ public abstract class ConfigInfo : IConfigInfo
 
         return true;
     }
+}
+
+public class ConfigModifiedListener
+{
+    /// <summary>
+    /// Limits the listener to only be invoked for changes to a specific path and all paths that start with this.
+    /// </summary>
+    public required string? Path { get; init; }
+
+    public required Action<IConfig> Action { get; init; }
 }

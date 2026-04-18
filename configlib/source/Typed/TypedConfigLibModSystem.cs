@@ -1,8 +1,6 @@
 ﻿using configlib.source.Typed.API;
 using configlib.source.Typed.Config;
 using configlib.source.Typed.Extensions;
-using Newtonsoft.Json;
-using System.Text;
 using Vintagestory.API.Common;
 using Vintagestory.API.Datastructures;
 
@@ -12,8 +10,14 @@ public class TypedConfigLibModSystem : ModSystem, IConfigProvider
 {
     public bool CanRegisterNewConfig { get; private set; } = true;
 
+    /// <summary>
+    /// The loaded configs
+    /// </summary>
     private static readonly Dictionary<string, IConfig> _loadedConfigs = [];
 
+    /// <summary>
+    /// The configs received from server that have not been loaded yet.
+    /// </summary>
     private Dictionary<string, UnloadedConfig>? _unloadedConfigs;
 
     public IConfig? this[string path]
@@ -108,7 +112,7 @@ public class TypedConfigLibModSystem : ModSystem, IConfigProvider
             }
             return null;
         }
-
+        
         if (!CanRegisterNewConfig)
         {
             Mod.Logger.Error("Attempt to register a new config with path '{0}' of type '{1}' after the config registration phase has ended. This is not allowed.", relativePath, typeof(T).AssemblyQualifiedName);
@@ -124,10 +128,11 @@ public class TypedConfigLibModSystem : ModSystem, IConfigProvider
             }
 
             var loadedConfig = unloadedConfig.TryLoadConfig<T>(api, Mod.Logger);
-            if(loadedConfig is not null && onInitialLoad is not null)
+            if(loadedConfig is not null)
             {
-                onInitialLoad.InvokeSafe(Mod.Logger, Events.InitialConfigLoad, loadedConfig);
-                //TODO eventbus maybe
+                _loadedConfigs[relativePath] = loadedConfig;
+                onInitialLoad?.InvokeSafe(Mod.Logger, Events.InitialConfigLoad, loadedConfig);
+                api.Event.PushEventSafe(Mod.Logger, Events.InitialConfigLoad, new StringAttribute(relativePath));
             }
             return loadedConfig;
         }
@@ -139,6 +144,7 @@ public class TypedConfigLibModSystem : ModSystem, IConfigProvider
         }
 
         T instance;
+        bool isNewConfig = false;
         try
         {
             instance = api.LoadModConfig<T>(relativePath);
@@ -146,7 +152,7 @@ public class TypedConfigLibModSystem : ModSystem, IConfigProvider
             if(instance is null)
             {
                 instance = new T();
-                api.StoreModConfig(instance, relativePath); //TODO allow for comments/annotation
+                isNewConfig = true;
             }
         }
         catch(Exception ex)
@@ -165,6 +171,9 @@ public class TypedConfigLibModSystem : ModSystem, IConfigProvider
         };
         _loadedConfigs[relativePath] = config;
         onInitialLoad?.InvokeSafe(Mod.Logger, Events.InitialConfigLoad, config);
+        api.Event.PushEventSafe(Mod.Logger, Events.InitialConfigLoad, new StringAttribute(relativePath));
+
+        if (isNewConfig) config.SaveConfig(api, Mod.Logger);
 
         return config;
     }
