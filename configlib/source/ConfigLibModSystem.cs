@@ -474,6 +474,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
 
     private void SendEventToServer(string eventName, TreeAttribute eventData)
     {
+        if(_api is not ICoreClientAPI clientApi || !clientApi.World.Player.HasPrivilege(Privilege.controlserver)) return;
+
         ConfigEventPacket eventPacket = new()
         {
             EventName = eventName,
@@ -483,6 +485,20 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
     }
     private void SendEvent(IServerPlayer fromPlayer, ConfigEventPacket eventPacket)
     {
+        if (eventPacket.EventName is null || !eventPacket.EventName.StartsWith("configlib:"))
+        {
+            _api?.Logger.Warning($"[Config lib] Player '{fromPlayer.PlayerName}' tried to push event outside of ConfigLib scope: '{eventPacket.EventName}'.");
+            _api?.Logger.Audit($"[Config lib] received event push outside of ConfigLib scope: '{fromPlayer.PlayerName}' - '{eventPacket.EventName}'.");
+            return;
+        }
+
+        if (!fromPlayer.HasPrivilege(Privilege.controlserver))
+        {
+            _api?.Logger.Warning($"[Config lib] Player '{fromPlayer.PlayerName}' without privilege '{Privilege.controlserver}' tried to push event '{eventPacket.EventName}'.");
+            _api?.Logger.Audit($"[Config lib] missing privilege to push event: '{fromPlayer.PlayerName}' - '{eventPacket.EventName}'.");
+            return;
+        }
+
         TreeAttribute eventDataTree = new();
         eventDataTree.FromBytes(eventPacket.Data);
         eventDataTree.SetString("player", fromPlayer.PlayerUID);
