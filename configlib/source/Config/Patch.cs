@@ -214,18 +214,14 @@ internal partial class AssetPatch
 
         try
         {
-            return new(JArray.Parse(json));
+            var token = JToken.Parse(json);
+            if(token.Type != JTokenType.Object && token.Type != JTokenType.Array) return null;
+            
+            return new(token);
         }
         catch
         {
-            try
-            {
-                return new(JObject.Parse(json));
-            }
-            catch
-            {
-                return null;
-            }
+            return null;
         }
     }
 
