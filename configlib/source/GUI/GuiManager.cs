@@ -94,6 +94,7 @@ internal class GuiManager : IDisposable
             {
                 _modSystem.Draw -= Draw;
                 _modSystem.Closed -= CloseConfigWindow;
+                if (_instance == this) _instance = null;
             }
 
             _disposed = true;

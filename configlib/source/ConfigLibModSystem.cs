@@ -166,6 +166,8 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
         {
             ConfigRegistry.ConfigsLoaded -= ReloadConfigs;
         }
+        // Static event: left subscribed, it keeps this world's mod system and API alive after the world closes.
+        ConfigRegistry.OnToBytes -= OnRegistryToBytes;
         _registry = null;
         _guiManager = null;
 
@@ -255,8 +257,9 @@ public sealed class ConfigLibModSystem : ModSystem, IConfigProvider
             _configsToRegister.Clear();
         }
 
-        ConfigRegistry.OnToBytes += () => _canRegisterNewConfig = false;
+        ConfigRegistry.OnToBytes += OnRegistryToBytes;
     }
+    private void OnRegistryToBytes() => _canRegisterNewConfig = false;
     private void LoadConfig(IAsset asset, ConfigRegistry? registry)
     {
         if (_api == null) return;
